@@ -42,8 +42,17 @@ struct MaclippyApp: App {
         let front: NSColor = paused ? .systemGray : teal
         let config = NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)
             .applying(NSImage.SymbolConfiguration(paletteColors: [front, .labelColor]))
-        let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Maclippy")!
+        let symbol = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Maclippy")!
             .withSymbolConfiguration(config)!
+
+        // Non-template images draw at natural size; the symbol is taller than the
+        // menu bar's drawable area and clips. Rescale to a fitting height.
+        let height: CGFloat = 18
+        let size = NSSize(width: symbol.size.width / symbol.size.height * height, height: height)
+        let image = NSImage(size: size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            return true
+        }
         image.isTemplate = false  // keep our colors instead of the menu bar tinting it
         return image
     }
