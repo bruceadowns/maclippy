@@ -1,0 +1,27 @@
+# SwiftLint configuration for Maclippy — https://github.com/realm/SwiftLint
+
+opt_in_rules:
+  - closure_spacing
+  - contains_over_first_not_nil
+  - empty_count
+  - empty_string
+  - first_where
+  - sorted_first_last
+  - toggle_bool
+  - vertical_whitespace_closing_braces
+
+disabled_rules:
+  - trailing_whitespace
+
+line_length:
+  warning: 140
+  error: 200
+
+identifier_name:
+  min_length:
+    warning: 1   # allow short names like id, x, ok
+
+excluded:
+  - .build
+  - build
+  - DerivedData

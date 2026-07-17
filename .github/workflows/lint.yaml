@@ -1,0 +1,23 @@
+name: Lint
+
+on:
+  push:
+    paths:
+      - '.github/workflows/lint.yaml'
+      - '.swiftlint.yml'
+      - '**/*.swift'
+  pull_request:
+    paths:
+      - '.github/workflows/lint.yaml'
+      - '.swiftlint.yml'
+      - '**/*.swift'
+
+jobs:
+  swiftlint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Run SwiftLint
+        run: swiftlint lint --strict

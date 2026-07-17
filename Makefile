@@ -1,0 +1,43 @@
+# Maclippy — common CLI actions.
+# Day-to-day dev is Xcode (⌘R); CI runs xcodebuild/swiftlint directly.
+
+PROJECT      := Maclippy.xcodeproj
+SCHEME       := Maclippy
+CONFIG       := Debug
+DERIVED_DATA := build
+APP          := $(DERIVED_DATA)/Build/Products/$(CONFIG)/Maclippy.app
+RELEASE_APP  := $(DERIVED_DATA)/Build/Products/Release/Maclippy.app
+INSTALL_DIR  := $(HOME)/Applications
+
+.PHONY: help build release run lint install clean open
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[1m%-9s\033[0m %s\n", $$1, $$2}'
+
+build: ## Build (Debug, ad-hoc signed)
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIG) \
+		-derivedDataPath $(DERIVED_DATA) -destination 'platform=macOS' build
+
+release: CONFIG := Release
+release: build ## Build (Release, ad-hoc signed)
+
+run: build ## Build, then launch (appears in the menu bar)
+	open $(APP)
+
+install: release ## Build Release, replace ~/Applications copy, relaunch
+	-osascript -e 'tell application "Maclippy" to quit'
+	rm -rf "$(INSTALL_DIR)/Maclippy.app"
+	cp -R "$(RELEASE_APP)" "$(INSTALL_DIR)/Maclippy.app"
+	open "$(INSTALL_DIR)/Maclippy.app"
+	@echo "Installed and launched $(INSTALL_DIR)/Maclippy.app"
+
+lint: ## Run SwiftLint --strict (brew install swiftlint)
+	@command -v swiftlint >/dev/null && swiftlint lint --strict || \
+		echo "swiftlint not installed — run: brew install swiftlint"
+
+clean: ## Remove build artifacts
+	rm -rf $(DERIVED_DATA)
+
+open: ## Open the project in Xcode
+	open $(PROJECT)
