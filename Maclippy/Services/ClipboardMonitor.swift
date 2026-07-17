@@ -118,6 +118,17 @@ final class ClipboardMonitor {
         save()
     }
 
+    /// Rewrites the current pasteboard to its plain text only, dropping rich
+    /// representations so the next paste lands unstyled. Acts on the live
+    /// pasteboard, not stored history.
+    func clearFormatting() {
+        let pasteboard = NSPasteboard.general
+        guard let plain = pasteboard.string(forType: .string) else { return }
+        pasteboard.clearContents()
+        pasteboard.setString(plain, forType: .string)
+        lastChangeCount = pasteboard.changeCount  // our own write; don't recapture
+    }
+
     // MARK: - History
 
     /// Refetches the menu snapshots. Filters/sorts mirror the Settings `@Query`s.
