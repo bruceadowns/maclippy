@@ -65,6 +65,12 @@ without Gatekeeper prompts. To update, `git pull` and repeat.
 > release is not available yet.
 
 
+## Contributing
+
+Simple gitflow: **`develop`** is the default branch, **`main`** the release line.
+Accumulate incremental commits on a working branch, then squash-merge it into
+`develop` via a PR. Keep `develop` and `main` history clean and meaningful.
+
 ## Documentation
 
 See [`SPEC.md`](SPEC.md) for the full design specification and rationale.
