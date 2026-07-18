@@ -10,6 +10,8 @@ struct ClipMenu: View {
     static let maxItemLength = 36
 
     var body: some View {
+        Button("Clear Formatting") { monitor.clearFormatting() }
+        Divider()
         if monitor.pinned.isEmpty, monitor.recent.isEmpty {
             Text("No clips yet")
         }
@@ -26,10 +28,10 @@ struct ClipMenu: View {
         Button(monitor.isPaused ? "Resume Maclippy" : "Pause Maclippy") {
             monitor.isPaused.toggle()
         }
-        Button("Clear Unpinned History...") {
+        Button("Clear Unpinned History…") {
             ClipActions.confirmClearHistory(monitor)
         }
-        Button("Preferences...") {
+        Button("Preferences…") {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }

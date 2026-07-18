@@ -73,7 +73,7 @@ All Apple system frameworks; no third-party packages.
 | Launch at login | ServiceManagement — `SMAppService.mainApp` |
 
 - **App type:** menu-bar agent — `LSUIElement = 1` (no Dock icon, no main window).
-- **Bundle id (proposed):** `com.github.bruceadowns.maclippy`.
+- **Bundle id:** `com.github.bruceadowns.maclippy`.
 
 ---
 
@@ -86,11 +86,15 @@ All Apple system frameworks; no third-party packages.
   a preference). Comparing the integer is cheap; real work only happens when the
   count changes.
 - On a change, capture **text representations**:
-  - `plain` (`public.utf8-plain-text`) — always required; drives the menu label.
+  - `plain` (`public.utf8-plain-text`) — always required; drives menu and list labels.
   - `rtf` (`public.rtf`) — optional, stored when present.
   - `html` (`public.html`) — optional, stored when present.
 - **Self-capture suppression:** the app records the `changeCount` produced by its
   own paste-back write and skips it, so re-copying a clip doesn't re-record it.
+- **Skips empty / whitespace-only** content — nothing worth storing.
+- **De-dupes by verbatim `plain`:** re-copying content already in history bumps
+  its `dateRecorded` to the top instead of inserting a duplicate. Matching is
+  exact — `"foo"` and `" foo "` are distinct clips.
 
 ### 4.2 "What you copied is what you paste"
 
@@ -122,8 +126,8 @@ gracefully — **never truncate**:
 
 - A menu toggle stops capturing new clips (existing history untouched). Primary
   use: flip off before copying a password, flip back on.
-- **Menu bar icon reflects state** (e.g. dimmed/slashed when paused) so the
-  paused state is glanceable.
+- **Menu bar icon reflects state:** the teal clipboard glyph turns gray while
+  paused, so the paused state is glanceable.
 - **Not persisted** — the app **always starts capturing on launch**, so a
   forgotten pause can't silently disable the app across restarts.
 
@@ -147,11 +151,23 @@ gracefully — **never truncate**:
 - `⌘,` for Preferences is provided automatically by the `Settings` scene and is
   treated as a system convention, not a feature.
 
+### 4.8 Clear formatting (menu action)
+
+- A **Clear Formatting** menu item rewrites the current system pasteboard to its
+  plain-text representation only, dropping rich (rtf/html) flavors so the next
+  paste lands unstyled.
+- Acts on the **live pasteboard**, not stored history. This is a user-initiated
+  transformation, so it doesn't contradict the *automatic* "what you copied is
+  what you paste" rule (§4.2) — the user asked for it.
+- Immediate action, no confirmation; no-op when the pasteboard holds no text.
+
 ---
 
 ## 5. Menu structure
 
 ```
+Clear Formatting                  ← acts on the current clipboard
+─────────────────────────         ← divider: action │ clips
 📌 Pinned                         ← click-to-paste; not editable here
    • Work email signature
    • Standup message
@@ -161,31 +177,36 @@ gracefully — **never truncate**:
    • clip a minute ago
    • …
 ─────────────────────────         ← divider: clips │ actions
-Pause Maclippy
-Clear History (except pinned)…
+Pause Maclippy                    ← "Resume Maclippy" while paused
+Clear Unpinned History…
 Preferences…
-Quit
+Quit Maclippy
 ```
 
-- Two dividers: **pinned ↔ recent**, and **clips ↔ actions**.
+- Three dividers: **Clear Formatting ↔ clips**, **pinned ↔ recent**, and **clips ↔ actions**.
 - Rows are pure click-to-paste. Pin/unpin/reorder/delete happen in Preferences,
   not in the menu (a plain `NSMenu` item can't both fire an action and host a
   submenu).
-- **Ellipsis convention:** items opening a dialog get `…` (`Clear History
-  (except pinned)…`, `Preferences…`). Immediate actions do not (`Pause`, `Quit`).
+- **Ellipsis convention:** items opening a dialog get `…` (`Clear Unpinned
+  History…`, `Preferences…`). Immediate actions do not (`Pause`, `Clear
+  Formatting`, `Quit`).
 - **Empty states:**
   - No pinned items → hide the Pinned section **and** its divider; menu opens
     straight into Recent.
   - No clips at all → a disabled `No clips yet` placeholder row.
 - **Dividers-only** — no text header rows. The pin glyph signals the pinned zone;
   dividers separate pinned ↔ recent ↔ actions. Keeps the menu compact.
+- **Row labels** derive from `plain`, truncated to **36 characters**
+  (`ClipMenu.maxItemLength`, hard-coded) with a trailing `…`. Leading/trailing
+  whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
+  verbatim-distinct clips don't render identically; interior whitespace stays
+  literal.
 
-### 5.1 Clear History (except pinned)
+### 5.1 Clear Unpinned History
 
 - Clears the **Recent** list only; **pinned always survives**.
 - Shows a confirmation dialog before clearing:
-  `"Clear recent clips?"  [Cancel] [Clear]`
-  (The label already states "except pinned," so the dialog needn't repeat it.)
+  `"Clear recent clips?" — "Pinned items are kept."  [Clear] [Cancel]`
 
 ---
 
@@ -207,7 +228,9 @@ final class Clip {
 
 - Text-only in v1 — no images, no files. Small payloads, stored inline (no
   external blob files).
-- `displayTitle` is derived from `plain` (trimmed/one-line) for the menu label.
+- `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars) and
+  labels the **Settings clips list**. The **menu** builds its own label from
+  `plain` live (whitespace-revealed, 36-char — see §5).
 
 ---
 
@@ -216,7 +239,9 @@ final class Clip {
 SwiftUI `Settings` scene, a `TabView` with two tabs.
 
 ### General
-- **History size** — max recent clips to keep. Default **20**.
+- **History size** — max recent clips to keep, **0–99** (field + stepper).
+  Default **20**; **0 means unlimited** (`trim()` no-ops). Lowering it trims the
+  store immediately.
 - **Ignore concealed items** — toggle. Default **ON**.
 - **Launch at login** — toggle, backed by `SMAppService.mainApp`
   (`register()` / `unregister()`; reflect `.status` when the window appears).
@@ -247,12 +272,15 @@ current value is the default it would ship with.
 
 ## 8. Repository scaffolding
 
-- **`README.md`** — description, screenshot, build steps (clone → open
-  `.xcodeproj` → set signing team → Run), macOS 14+ requirement.
+- **`README.md`** — description, build steps (clone → open `.xcodeproj` → Run;
+  ad-hoc signed, no team needed), macOS 14+ requirement.
 - **`LICENSE`** — **MIT**.
 - **`.gitignore`** — standard Swift/Xcode (`build/`, `DerivedData/`,
   `xcuserdata/`, etc.).
 - **`SPEC.md`** — this document.
+- **`Makefile`** — CLI wrappers for the Xcode build (`make build [CONFIG=Release]`,
+  `run`, `lint`, `install`, `clean`).
+- **`CLAUDE.md`** — guidance for AI assistants working in the repo.
 
 ---
 

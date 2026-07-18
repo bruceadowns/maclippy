@@ -36,7 +36,7 @@ struct GeneralSettingsView: View {
                     LaunchAtLogin.isEnabled = newValue
                     launchAtLogin = LaunchAtLogin.isEnabled
                 }
-            Button("Clear Unpinned History...") {
+            Button("Clear Unpinned History…") {
                 ClipActions.confirmClearHistory(monitor)
             }
         }
