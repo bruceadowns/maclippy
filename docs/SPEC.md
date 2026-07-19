@@ -277,7 +277,7 @@ current value is the default it would ship with.
 - **`LICENSE`** — **MIT**.
 - **`.gitignore`** — standard Swift/Xcode (`build/`, `DerivedData/`,
   `xcuserdata/`, etc.).
-- **`SPEC.md`** — this document.
+- **`docs/SPEC.md`** — this document. Per-feature specs live alongside it in `docs/`.
 - **`Makefile`** — CLI wrappers for the Xcode build (`make build [CONFIG=Release]`,
   `run`, `lint`, `install`, `clean`).
 - **`CLAUDE.md`** — guidance for AI assistants working in the repo.

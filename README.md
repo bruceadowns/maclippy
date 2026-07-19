@@ -73,7 +73,7 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 
 ## Documentation
 
-See [`SPEC.md`](SPEC.md) for the full design specification and rationale.
+See [`docs/SPEC.md`](docs/SPEC.md) for the full design specification and rationale.
 
 ## License
 
