@@ -119,6 +119,9 @@ gracefully — **never truncate**:
 - **Pinned:** a separate section, always shown above recent, ordered by
   `pinnedOrder`.
 - **Pinned items are never auto-evicted** and are exempt from Clear History.
+- **Unpinning bumps recency:** an unpinned clip re-enters Recent at the top
+  (`dateRecorded = .now`), like reuse — so it isn't dropped at its stale age
+  where trimming would evict it immediately.
 - **History trimming:** when recent-clip count exceeds the configured history
   size, evict oldest first. Pinned excluded from the count and from eviction.
 
@@ -201,6 +204,10 @@ Quit Maclippy
   whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
   verbatim-distinct clips don't render identically; interior whitespace stays
   literal.
+- A pinned clip with a `customLabel` (§6) shows that name instead — truncated
+  the same way, no whitespace-reveal, prefixed with a `key.fill` glyph marking it
+  as a named item. Cloaking means the plaintext is never shown (§6); the key
+  reveals nothing about the content.
 
 ### 5.1 Clear Unpinned History
 
@@ -220,6 +227,7 @@ final class Clip {
     var pinned: Bool
     var pinnedOrder: Int        // ordering among pinned items
     var displayTitle: String    // cleaned label shown in the menu
+    var customLabel: String?    // user-set name that cloaks content (pinned only)
     var plain: String           // always present
     var rtf: Data?              // optional rich representation
     var html: String?           // optional rich representation
@@ -231,6 +239,12 @@ final class Clip {
 - `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars) and
   labels the **Settings clips list**. The **menu** builds its own label from
   `plain` live (whitespace-revealed, 36-char — see §5).
+- `customLabel` is a user-set name that **replaces** the content-derived label in
+  both the menu and the clips list — its purpose is *cloaking* a stored secret
+  (e.g. a password) so the plaintext never shows in the menu bar. Set **only on
+  pinned clips**, cleared on unpin, capped at 80 chars. `nil` = show the derived
+  label. Paste-back is unaffected — the real `plain` is always what's copied.
+  Full design: [`name-pinned-clip.md`](name-pinned-clip.md).
 
 ---
 
@@ -248,8 +262,13 @@ SwiftUI `Settings` scene, a `TabView` with two tabs.
 - **Clear History (except pinned)…** — button with confirm.
 
 ### Clips
-- List of all clips (pinned + recent).
-- **Pin / unpin.**
+- List of all clips (pinned + recent). Per-row actions are icon buttons with
+  tooltip help: **pin/unpin**, **rename** (pinned only), **delete**.
+- **Pin / unpin.** Unpinning clears any `customLabel` (§6).
+- **Rename** (pinned only) — sets a `customLabel` that cloaks the clip. The
+  pencil turns that one row's label into an inline field (one at a time),
+  committing on Enter or focus loss; empty reverts to the derived label. See
+  [`name-pinned-clip.md`](name-pinned-clip.md).
 - **Drag to reorder** pinned items.
 - **Delete** an individual clip (no confirm — single deletes are trivially
   re-copyable; only bulk Clear History confirms).

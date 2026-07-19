@@ -16,7 +16,7 @@ struct ClipMenu: View {
             Text("No clips yet")
         }
         ForEach(monitor.pinned) { clip in
-            Button(label(for: clip)) { monitor.paste(clip) }
+            Button { monitor.paste(clip) } label: { menuLabel(for: clip) }
         }
         if !monitor.pinned.isEmpty {
             Divider()
@@ -38,8 +38,20 @@ struct ClipMenu: View {
         Button("Quit Maclippy") { NSApplication.shared.terminate(nil) }
     }
 
+    @ViewBuilder
+    private func menuLabel(for clip: Clip) -> some View {
+        if clip.customLabel != nil {
+            Label(label(for: clip), systemImage: "key.fill")
+        } else {
+            Text(label(for: clip))
+        }
+    }
+
     private func label(for clip: Clip) -> String {
-        truncated(revealWhitespace(clip.plain))
+        // A custom name cloaks the content, so show it verbatim (no
+        // whitespace-reveal, which only helps disambiguate raw clips).
+        if let custom = clip.customLabel { return truncated(custom) }
+        return truncated(revealWhitespace(clip.plain))
     }
 
     private func truncated(_ title: String) -> String {
