@@ -170,7 +170,8 @@ gracefully — **never truncate**:
 
 ```
 Clear Formatting                  ← acts on the current clipboard
-─────────────────────────         ← divider: action │ clips
+Pause Maclippy                    ← "Resume Maclippy" while paused
+─────────────────────────         ← divider: commands │ clips
 📌 Pinned                         ← click-to-paste; not editable here
    • Work email signature
    • Standup message
@@ -180,19 +181,25 @@ Clear Formatting                  ← acts on the current clipboard
    • clip a minute ago
    • …
 ─────────────────────────         ← divider: clips │ actions
-Pause Maclippy                    ← "Resume Maclippy" while paused
-Clear Unpinned History…
+Clear Unpinned History…           ← destructive; kept away from the clip rows
+About Maclippy                    ← system standard About panel
 Preferences…
 Quit Maclippy
 ```
 
-- Three dividers: **Clear Formatting ↔ clips**, **pinned ↔ recent**, and **clips ↔ actions**.
-- Rows are pure click-to-paste. Pin/unpin/reorder/delete happen in Preferences,
-  not in the menu (a plain `NSMenu` item can't both fire an action and host a
-  submenu).
+- Three dividers: **commands ↔ clips**, **pinned ↔ recent**, and **clips ↔ actions**.
+- **Top = act now, middle = pick a clip, bottom = maintenance + app.** The two
+  safe, frequent commands (Clear Formatting, Pause) sit at the top for quick
+  access; the destructive Clear Unpinned History stays in the bottom cluster,
+  deliberately *not* adjacent to the clip rows a user clicks constantly.
+- Rows are pure click-to-paste. Pin/unpin/rename/reorder/delete happen in
+  Preferences, not in the menu (a plain `NSMenu` item can't both fire an action
+  and host a submenu).
 - **Ellipsis convention:** items opening a dialog get `…` (`Clear Unpinned
   History…`, `Preferences…`). Immediate actions do not (`Pause`, `Clear
-  Formatting`, `Quit`).
+  Formatting`, `Quit`). **Exception:** `About Maclippy` opens the standard About
+  panel but takes no `…`, per Apple's convention for "About <App>". See
+  [`about-panel.md`](about-panel.md).
 - **Empty states:**
   - No pinned items → hide the Pinned section **and** its divider; menu opens
     straight into Recent.

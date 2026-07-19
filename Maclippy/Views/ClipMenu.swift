@@ -11,6 +11,9 @@ struct ClipMenu: View {
 
     var body: some View {
         Button("Clear Formatting") { monitor.clearFormatting() }
+        Button(monitor.isPaused ? "Resume Maclippy" : "Pause Maclippy") {
+            monitor.isPaused.toggle()
+        }
         Divider()
         if monitor.pinned.isEmpty, monitor.recent.isEmpty {
             Text("No clips yet")
@@ -25,12 +28,11 @@ struct ClipMenu: View {
             Button(label(for: clip)) { monitor.paste(clip) }
         }
         Divider()
-        Button(monitor.isPaused ? "Resume Maclippy" : "Pause Maclippy") {
-            monitor.isPaused.toggle()
-        }
         Button("Clear Unpinned History…") {
             ClipActions.confirmClearHistory(monitor)
         }
+        // No ellipsis: Apple convention for "About <App>" (unlike Preferences…).
+        Button("About Maclippy") { ClipActions.showAbout() }
         Button("Preferences…") {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
