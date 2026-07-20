@@ -24,7 +24,7 @@ There is **no test target** and no tests yet — `make test` does not exist. Ad-
 
 Two SwiftUI scenes in `MaclippyApp.swift`, both attached to one shared `ModelContainer`: a `MenuBarExtra` (`.menu` style) hosting `ClipMenu`, and a `Settings` scene hosting `SettingsView` (General + Clips tabs). A single `ClipboardMonitor` is created at launch with the container's `mainContext` and injected into both.
 
-The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle`). Payloads are stored inline; text-only in v1.
+The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle` + optional `customLabel`). Payloads are stored inline; text-only in v1. `customLabel` is a user-set name that cloaks a **pinned** clip's content in the UI (e.g. a password), set/cleared only via the Clips tab; see `docs/name-pinned-clip.md`.
 
 ### The central quirk: the menu does NOT use `@Query`
 
@@ -51,7 +51,7 @@ User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Pr
 
 ## Conventions
 
-- **Menu labels** are built from `clip.plain` via `ClipMenu`, truncated to `maxItemLength` (36); tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical.
+- **Menu labels** are built from `clip.plain` via `ClipMenu`, truncated to `maxItemLength` (36); tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical. A pinned clip with a `customLabel` instead shows that name (no whitespace-reveal) with a `key.fill` glyph, in both the menu and the Clips tab.
 - **Comments**: explain non-obvious *why* only; no narration comments.
 
 ## Git workflow
