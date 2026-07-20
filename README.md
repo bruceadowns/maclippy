@@ -81,6 +81,7 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 ## Documentation
 
 - [`docs/SPEC.md`](docs/SPEC.md) — full design specification and rationale.
+- [`docs/roadmap.md`](docs/roadmap.md) — where the project is headed after v1.
 - Per-feature specs live alongside it in [`docs/`](docs/):
   [naming a pinned clip](docs/name-pinned-clip.md),
   [the About panel](docs/about-panel.md).
