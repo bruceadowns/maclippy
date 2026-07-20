@@ -180,32 +180,32 @@ Pause Maclippy                    ← "Resume Maclippy" while paused
    • clip just now
    • clip a minute ago
    • …
-─────────────────────────         ← divider: clips │ actions
-Clear Unpinned History…           ← destructive; kept away from the clip rows
+─────────────────────────         ← divider: clips │ app
 About Maclippy                    ← system standard About panel
 Preferences…
 Quit Maclippy
 ```
 
-- Three dividers: **commands ↔ clips**, **pinned ↔ recent**, and **clips ↔ actions**.
-- **Top = act now, middle = pick a clip, bottom = maintenance + app.** The two
-  safe, frequent commands (Clear Formatting, Pause) sit at the top for quick
-  access; the destructive Clear Unpinned History stays in the bottom cluster,
-  deliberately *not* adjacent to the clip rows a user clicks constantly.
+- Three dividers: **commands ↔ clips**, **pinned ↔ recent**, and **clips ↔ app**.
+- **Top = act now, middle = pick a clip, bottom = app.** The two safe, frequent
+  commands (Clear Formatting, Pause) sit at the top for quick access; the bottom
+  is the standard macOS trio (About / Preferences / Quit).
+- **Clear Unpinned History is not in the menu.** It's destructive, rare, and
+  undo-less, so it lives only in Preferences → General (§7) with a confirm —
+  deliberately not one careless click away in the primary menu.
 - Rows are pure click-to-paste. Pin/unpin/rename/reorder/delete happen in
   Preferences, not in the menu (a plain `NSMenu` item can't both fire an action
   and host a submenu).
-- **Ellipsis convention:** items opening a dialog get `…` (`Clear Unpinned
-  History…`, `Preferences…`). Immediate actions do not (`Pause`, `Clear
-  Formatting`, `Quit`). **Exception:** `About Maclippy` opens the standard About
-  panel but takes no `…`, per Apple's convention for "About <App>". See
-  [`about-panel.md`](about-panel.md).
+- **Ellipsis convention:** items opening a dialog get `…` (`Preferences…`).
+  Immediate actions do not (`Pause`, `Clear Formatting`, `Quit`). **Exception:**
+  `About Maclippy` opens the standard About panel but takes no `…`, per Apple's
+  convention for "About <App>". See [`about-panel.md`](about-panel.md).
 - **Empty states:**
   - No pinned items → hide the Pinned section **and** its divider; menu opens
     straight into Recent.
   - No clips at all → a disabled `No clips yet` placeholder row.
 - **Dividers-only** — no text header rows. The pin glyph signals the pinned zone;
-  dividers separate pinned ↔ recent ↔ actions. Keeps the menu compact.
+  dividers separate commands ↔ pinned ↔ recent ↔ app. Keeps the menu compact.
 - **Row labels** derive from `plain`, truncated to **36 characters**
   (`ClipMenu.maxItemLength`, hard-coded) with a trailing `…`. Leading/trailing
   whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
@@ -215,12 +215,6 @@ Quit Maclippy
   the same way, no whitespace-reveal, prefixed with a `key.fill` glyph marking it
   as a named item. Cloaking means the plaintext is never shown (§6); the key
   reveals nothing about the content.
-
-### 5.1 Clear Unpinned History
-
-- Clears the **Recent** list only; **pinned always survives**.
-- Shows a confirmation dialog before clearing:
-  `"Clear recent clips?" — "Pinned items are kept."  [Clear] [Cancel]`
 
 ---
 
@@ -266,7 +260,10 @@ SwiftUI `Settings` scene, a `TabView` with two tabs.
 - **Ignore concealed items** — toggle. Default **ON**.
 - **Launch at login** — toggle, backed by `SMAppService.mainApp`
   (`register()` / `unregister()`; reflect `.status` when the window appears).
-- **Clear History (except pinned)…** — button with confirm.
+- **Clear History (except pinned)…** — button with confirm. Clears the
+  **Recent** list only; **pinned always survives**. Confirmation dialog:
+  `"Clear recent clips?" — "Pinned items are kept."  [Clear] [Cancel]`. This is
+  the **only** place the action lives (not in the menu — see §5).
 
 ### Clips
 - List of all clips (pinned + recent). Per-row actions are icon buttons with

@@ -28,8 +28,7 @@ mirroring the standard macOS app-menu order (About → Settings → … → Quit
 keeping with §5's sparse-divider rule.
 
 ```
-─────────────────────────   ← existing clips │ actions divider
-Clear Unpinned History…
+─────────────────────────   ← existing clips │ app divider
 About Maclippy               ← new
 Preferences…
 Quit Maclippy

@@ -28,9 +28,6 @@ struct ClipMenu: View {
             Button(label(for: clip)) { monitor.paste(clip) }
         }
         Divider()
-        Button("Clear Unpinned History…") {
-            ClipActions.confirmClearHistory(monitor)
-        }
         // No ellipsis: Apple convention for "About <App>" (unlike Preferences…).
         Button("About Maclippy") { ClipActions.showAbout() }
         Button("Preferences…") {
