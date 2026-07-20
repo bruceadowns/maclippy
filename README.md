@@ -87,9 +87,9 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 
 ## Inspiration
 
-The menu-bar-only, click-to-paste design takes cues from **CopyClip** and
-**CopyClip 2** by FIPLAB — long-running Mac clipboard managers that live
-entirely in the menu bar.
+The menu-bar-only, click-to-paste design takes cues from **CopyClip** by
+FIPLAB — a long-running Mac clipboard manager that lives entirely in the menu
+bar.
 
 ## License
 
