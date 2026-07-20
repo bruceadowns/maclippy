@@ -85,6 +85,14 @@ Accumulate incremental commits on a working branch, then squash-merge it into
   [naming a pinned clip](docs/name-pinned-clip.md),
   [the About panel](docs/about-panel.md).
 
+## Inspiration
+
+The menu-bar-only, click-to-paste design takes cues from **CopyClip** and
+**CopyClip 2** by FIPLAB — long-running Mac clipboard managers that live
+entirely in the menu bar
+([FIPLAB](https://fiplab.com/apps/copyclip-for-mac),
+[Softonic](http://copyclip-clipboard-history-manager.en.softonic.com/mac)).
+
 ## License
 
 [MIT](LICENSE) © 2026 Bruce Downs
