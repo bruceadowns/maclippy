@@ -89,9 +89,7 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 
 The menu-bar-only, click-to-paste design takes cues from **CopyClip** and
 **CopyClip 2** by FIPLAB — long-running Mac clipboard managers that live
-entirely in the menu bar
-([FIPLAB](https://fiplab.com/apps/copyclip-for-mac),
-[Softonic](http://copyclip-clipboard-history-manager.en.softonic.com/mac)).
+entirely in the menu bar.
 
 ## License
 
