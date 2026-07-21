@@ -80,8 +80,8 @@ help** since glyphs alone are ambiguous:
   unnamed rather than saving the title as a name. **Esc** abandons the edit and
   reverts to the stored name (nothing saved). Input is capped at 80 characters (§3).
 - **No duplicate labels.** A name that matches another **pinned** clip's
-  `customLabel` (case-insensitive) is rejected — `NSSound.beep()`, revert, nothing
-  saved (same terminal state as Esc), on both the Enter and focus-loss paths. Two
+  `customLabel` (case-insensitive) is rejected — reverted, nothing saved (same
+  terminal state as Esc), on both the Enter and focus-loss paths. Two
   clips with the same cloaking name are indistinguishable in the menu (no
   whitespace-reveal on custom names, both keyed), so clicking the wrong one pastes
   the wrong secret silently — the one collision worth blocking. Enforceable

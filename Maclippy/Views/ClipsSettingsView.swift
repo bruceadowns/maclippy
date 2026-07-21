@@ -1,4 +1,3 @@
-import AppKit
 import SwiftData
 import SwiftUI
 
@@ -97,10 +96,9 @@ struct ClipsSettingsView: View {
         guard trimmed != editingSeed.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
         // Empty, or a name equal to the real content, cloaks nothing → uncloak.
         let newLabel = (trimmed.isEmpty || trimmed == clip.plain) ? nil : String(trimmed.prefix(Clip.maxLabelLength))
-        // A duplicate name makes two cloaked clips indistinguishable — reject (beep, revert).
+        // A duplicate name makes two cloaked clips indistinguishable — reject (revert, nothing saved).
         if let newLabel,
            pinned.contains(where: { $0.id != clip.id && $0.customLabel?.caseInsensitiveCompare(newLabel) == .orderedSame }) {
-            NSSound.beep()
             return
         }
         clip.customLabel = newLabel
