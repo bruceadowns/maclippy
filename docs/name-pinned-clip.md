@@ -1,6 +1,6 @@
 # Feature spec — Name (cloak) a pinned clip
 
-**Status:** approved, not yet implemented. Per-feature spec; extends
+**Status:** implemented. Per-feature spec; extends
 [`SPEC.md`](SPEC.md), where section references (§) point unless noted.
 
 ## 1. Summary
@@ -72,9 +72,13 @@ help** since glyphs alone are ambiguous:
   persistent column of edit boxes). The field is seeded with the current label —
   the `customLabel` if named, otherwise the content-derived `displayTitle` — so
   you edit from the current value. Commit on Enter
-  or focus loss returns to static text; an empty / whitespace-only value sets
-  `customLabel` back to `nil`. **Esc** abandons the edit and reverts to the
-  stored name (nothing saved). Input is capped at 80 characters (§3).
+  or focus loss returns to static text. Three things clear `customLabel` back to
+  `nil` (uncloak): an empty / whitespace-only value, **or** a value equal to the
+  clip's real content (`plain`) — naming a clip after its own content cloaks
+  nothing. Committing the seeded value **unchanged** is a no-op, identical to
+  Esc — so accepting an unnamed clip's `displayTitle` without editing leaves it
+  unnamed rather than saving the title as a name. **Esc** abandons the edit and
+  reverts to the stored name (nothing saved). Input is capped at 80 characters (§3).
 - **Delete** — `trash` icon (unchanged). Tooltip: `Delete`.
 - **Named indicator.** A named row shows a small monochrome `key.fill` SF Symbol
   (secondary, caption-sized) before its label — enough to tell "I named this"
