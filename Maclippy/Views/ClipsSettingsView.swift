@@ -11,6 +11,7 @@ struct ClipsSettingsView: View {
 
     @State private var editingID: UUID?
     @State private var draft = ""
+    @State private var editingSeed = ""
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
@@ -76,6 +77,7 @@ struct ClipsSettingsView: View {
 
     private func beginEditing(_ clip: Clip) {
         draft = clip.customLabel ?? clip.displayTitle  // seed with the current label
+        editingSeed = draft  // committing this unchanged is a no-op, same as Esc
         editingID = clip.id
     }
 
@@ -88,8 +90,12 @@ struct ClipsSettingsView: View {
     private func commit(_ clip: Clip) {
         guard editingID == clip.id else { return }  // ignore stray blur after a prior commit / cancel
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        clip.customLabel = trimmed.isEmpty ? nil : String(trimmed.prefix(Clip.maxLabelLength))
         editingID = nil
+        // Unchanged from the seeded value → same as Esc. Compared against the seed,
+        // not customLabel, so leaving an unnamed clip's displayTitle in place stays nil.
+        guard trimmed != editingSeed.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+        // Empty, or a name equal to the real content, cloaks nothing → uncloak.
+        clip.customLabel = (trimmed.isEmpty || trimmed == clip.plain) ? nil : String(trimmed.prefix(Clip.maxLabelLength))
         try? context.save()
     }
 
