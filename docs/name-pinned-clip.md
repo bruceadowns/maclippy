@@ -79,6 +79,18 @@ help** since glyphs alone are ambiguous:
   Esc — so accepting an unnamed clip's `displayTitle` without editing leaves it
   unnamed rather than saving the title as a name. **Esc** abandons the edit and
   reverts to the stored name (nothing saved). Input is capped at 80 characters (§3).
+- **No duplicate labels.** A name that matches another **pinned** clip's
+  `customLabel` (case-insensitive) is rejected — `NSSound.beep()`, revert, nothing
+  saved (same terminal state as Esc), on both the Enter and focus-loss paths. Two
+  clips with the same cloaking name are indistinguishable in the menu (no
+  whitespace-reveal on custom names, both keyed), so clicking the wrong one pastes
+  the wrong secret silently — the one collision worth blocking. Enforceable
+  precisely *because* pinned labels are a fixed set edited only here.
+  **Not** guarded: a label equal to some *other* clip's content (`plain`). That's
+  a different, weaker case — the real clip carries no `key.fill`, so the two stay
+  distinguishable — and it's unenforceable anyway (Recent churns every poll; a new
+  copy matching an existing label would need policing at capture, against §7/§9
+  KISS). Enforced-at-edit-but-not-at-capture would be a rule in appearance only.
 - **Delete** — `trash` icon (unchanged). Tooltip: `Delete`.
 - **Named indicator.** A named row shows a small monochrome `key.fill` SF Symbol
   (secondary, caption-sized) before its label — enough to tell "I named this"
