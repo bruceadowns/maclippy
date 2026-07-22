@@ -210,7 +210,8 @@ Quit Maclippy
   (`ClipMenu.maxItemLength`, hard-coded) with a trailing `…`. Leading/trailing
   whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
   verbatim-distinct clips don't render identically; interior whitespace stays
-  literal.
+  literal. The reveal is `Clip.revealedPlain`, shared with the Clips tab (§7) so
+  the two surfaces label identically.
 - A pinned clip with a `customLabel` (§6) shows that name instead — truncated
   the same way, no whitespace-reveal, prefixed with a `key.fill` glyph marking it
   as a named item. Cloaking means the plaintext is never shown (§6); the key
@@ -227,7 +228,7 @@ final class Clip {
     var dateRecorded: Date
     var pinned: Bool
     var pinnedOrder: Int        // ordering among pinned items
-    var displayTitle: String    // cleaned label shown in the menu
+    var displayTitle: String    // cleaned text; seeds the rename field
     var customLabel: String?    // user-set name that cloaks content (pinned only)
     var plain: String           // always present
     var rtf: Data?              // optional rich representation
@@ -237,9 +238,11 @@ final class Clip {
 
 - Text-only in v1 — no images, no files. Small payloads, stored inline (no
   external blob files).
-- `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars) and
-  labels the **Settings clips list**. The **menu** builds its own label from
-  `plain` live (whitespace-revealed, 36-char — see §5).
+- `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars). It's
+  the **clean seed for the rename field** (and its placeholder) — never a row
+  label. Both the **menu** and the **Settings clips list** label unnamed clips
+  from `Clip.revealedPlain` (whitespace-revealed `plain`; the menu adds a 36-char
+  cap, the list relies on line truncation — see §5, §7), so the two agree.
 - `customLabel` is a user-set name that **replaces** the content-derived label in
   both the menu and the clips list — its purpose is *cloaking* a stored secret
   (e.g. a password) so the plaintext never shows in the menu bar. Set **only on
@@ -268,6 +271,9 @@ SwiftUI `Settings` scene, a `TabView` with two tabs.
 ### Clips
 - List of all clips (pinned + recent). Per-row actions are icon buttons with
   tooltip help: **pin/unpin**, **rename** (pinned only), **delete**.
+- Row labels use `Clip.revealedPlain` — the same whitespace-reveal as the menu
+  (§5), so `"foo"` and `" foo "` read as distinct here too. A named clip shows
+  its `customLabel` verbatim (no reveal) with the `key.fill` glyph.
 - **Pin / unpin.** Unpinning clears any `customLabel` (§6).
 - **Rename** (pinned only) — sets a `customLabel` that cloaks the clip. The
   pencil turns that one row's label into an inline field (one at a time),

@@ -36,4 +36,27 @@ final class Clip {
         let firstLine = trimmed.split(whereSeparator: \.isNewline).first.map(String.init) ?? trimmed
         return String(firstLine.prefix(maxLabelLength))
     }
+
+    /// `plain` with edge whitespace made visible, so verbatim-distinct clips
+    /// (e.g. "foobar" vs " foobar ") don't render identically. Interior spaces
+    /// stay literal; newlines collapse to a glyph to keep the label one line.
+    /// Shared by the menu and the Clips tab so the two never drift.
+    var revealedPlain: String {
+        let chars = Array(plain)
+        guard let first = chars.firstIndex(where: { !$0.isWhitespace }),
+              let last = chars.lastIndex(where: { !$0.isWhitespace }) else {
+            return plain
+        }
+        var out = ""
+        for (i, char) in chars.enumerated() {
+            let edge = i < first || i > last
+            switch char {
+            case "\n", "\r": out.append("⏎")
+            case "\t": out.append(edge ? "⇥" : "\t")
+            case " ": out.append(edge ? "·" : " ")
+            default: out.append(char)
+            }
+        }
+        return out
+    }
 }

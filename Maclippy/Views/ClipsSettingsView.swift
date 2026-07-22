@@ -52,7 +52,7 @@ struct ClipsSettingsView: View {
                         if new.count > Clip.maxLabelLength { draft = String(new.prefix(Clip.maxLabelLength)) }
                     }
             } else {
-                Text(clip.customLabel ?? clip.displayTitle).lineLimit(1)
+                Text(clip.customLabel ?? clip.revealedPlain).lineLimit(1)
             }
             Spacer()
             Button { togglePin(clip) } label: {

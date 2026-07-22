@@ -39,8 +39,9 @@ var customLabel: String?   // user-set name; nil = show content-derived label
 - **Capped at 80 characters**, matching `displayTitle`'s `makeTitle` cap (§6),
   so both label sources share one ceiling. The menu's 35-char display
   truncation (§4) still applies on top.
-- `displayTitle` keeps its sole meaning (content-derived preview); the Recent
-  render path never reads `customLabel`.
+- `displayTitle` is the clean seed for the rename field; unnamed rows render from
+  `Clip.revealedPlain` (whitespace-revealed `plain`, shared with the menu), and
+  the render path reads `customLabel` only to show a name verbatim.
 - SwiftData lightweight migration (optional, defaults `nil`) — no migration
   plan, no code.
 
@@ -123,11 +124,14 @@ solved here — Pause / Ignore-concealed cover the "never capture" case.
 
 Code (see architecture in `CLAUDE.md`):
 
-- `Model/Clip.swift` — add `customLabel: String?` (init to `nil`).
+- `Model/Clip.swift` — add `customLabel: String?` (init to `nil`); `revealedPlain`
+  computed property holds the shared whitespace-reveal.
 - `Views/ClipMenu.swift` — `label(for:)` returns `customLabel` (truncated, no
-  whitespace-reveal) for cloaked pinned entries; unchanged otherwise.
+  whitespace-reveal) for cloaked pinned entries; unnamed entries use
+  `clip.revealedPlain`.
 - `Views/ClipsSettingsView.swift` — pin/unpin → icon; add pencil rename (inline
-  edit, pinned only) and tooltips; clear `customLabel` in the unpin path.
+  edit, pinned only) and tooltips; clear `customLabel` in the unpin path; unnamed
+  rows render `clip.revealedPlain` (whitespace parity with the menu).
 
 `ClipboardMonitor.reload()` filters/sorts are unaffected (`customLabel` doesn't
 change ordering). No new bulk mutation, so no extra `reload()` wiring.

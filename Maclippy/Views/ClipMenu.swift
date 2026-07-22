@@ -50,33 +50,11 @@ struct ClipMenu: View {
         // A custom name cloaks the content, so show it verbatim (no
         // whitespace-reveal, which only helps disambiguate raw clips).
         if let custom = clip.customLabel { return truncated(custom) }
-        return truncated(revealWhitespace(clip.plain))
+        return truncated(clip.revealedPlain)
     }
 
     private func truncated(_ title: String) -> String {
         guard title.count > Self.maxItemLength else { return title }
         return String(title.prefix(Self.maxItemLength - 1)) + "…"
-    }
-
-    /// Makes leading/trailing whitespace visible so verbatim-distinct clips
-    /// (e.g. "foobar" vs " foobar ") don't render identically. Interior spaces
-    /// stay literal; newlines collapse to a glyph to keep the item one line.
-    private func revealWhitespace(_ plain: String) -> String {
-        let chars = Array(plain)
-        guard let first = chars.firstIndex(where: { !$0.isWhitespace }),
-              let last = chars.lastIndex(where: { !$0.isWhitespace }) else {
-            return plain
-        }
-        var out = ""
-        for (i, char) in chars.enumerated() {
-            let edge = i < first || i > last
-            switch char {
-            case "\n", "\r": out.append("⏎")
-            case "\t": out.append(edge ? "⇥" : "\t")
-            case " ": out.append(edge ? "·" : " ")
-            default: out.append(char)
-            }
-        }
-        return out
     }
 }
