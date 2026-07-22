@@ -1,6 +1,6 @@
 # Feature spec — About Maclippy
 
-**Status:** approved, not yet implemented. Per-feature spec; extends
+**Status:** implemented. Per-feature spec; extends
 [`SPEC.md`](SPEC.md), where section references (§) point unless noted.
 
 ## 1. Summary
