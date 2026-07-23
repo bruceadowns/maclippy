@@ -211,11 +211,26 @@ Quit Maclippy
   whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
   verbatim-distinct clips don't render identically; interior whitespace stays
   literal. The reveal is `Clip.revealedPlain`, shared with the Clips tab (§7) so
-  the two surfaces label identically.
+  the two surfaces label identically. It processes at most `maxRevealChars`
+  (1024) of `plain`, so labelling a 2 MB clip never scans the whole payload —
+  everything past that cap is invisible anyway (label 36, peek 500).
 - A pinned clip with a `customLabel` (§6) shows that name instead — truncated
   the same way, no whitespace-reveal, prefixed with a `key.fill` glyph marking it
   as a named item. Cloaking means the plaintext is never shown (§6); the key
   reveals nothing about the content.
+- **Hover tooltip (peek).** A row whose label is actually clipped (source > 36
+  chars) carries a `.help` tooltip so a long clip is legible without pasting it.
+  Unlike the one-line row label, the peek shows the clip **verbatim** — real line
+  breaks and spaces, no `⏎`/`·`/`⇥` glyph reveal — because a tooltip isn't
+  constrained to one line and a multi-line clip (code, an address) reads far
+  better this way. Whitespace-reveal stays the *label's* job (its disambiguation
+  surface); the tooltip's job is legibility. Rows that already fit get no tooltip.
+  The peek is capped at **500 chars** (`ClipMenu.maxPeekLength`): a clip can be up
+  to 2 MB (§4.3) and handing that whole string to a tooltip janks AppKit's layout
+  — the cap and the fit-check use index math, never an O(n) `.count`/scan. A
+  cloaked clip peeks its `customLabel` only, **never** its hidden payload.
+  Appearance and delay are the system's (`NSInitialToolTipDelay`); Maclippy sets
+  neither.
 
 ---
 
@@ -238,6 +253,12 @@ final class Clip {
 
 - Text-only in v1 — no images, no files. Small payloads, stored inline (no
   external blob files).
+- **Store location:** a SwiftData/SQLite store at
+  `~/Library/Application Support/Maclippy/Maclippy.store` (+ `-wal`/`-shm`). The
+  container is given an explicit `ModelConfiguration` URL so the app **namespaces**
+  its store under `Maclippy/` instead of SwiftData's bare `default.store` in the
+  shared Application Support root (which collides by name with any other SwiftData
+  app). Not sandboxed — `LSUIElement` agent, no App Sandbox.
 - `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars). It's
   the **clean seed for the rename field** (and its placeholder) — never a row
   label. Both the **menu** and the **Settings clips list** label unnamed clips
@@ -249,6 +270,45 @@ final class Clip {
   pinned clips**, cleared on unpin, capped at 80 chars. `nil` = show the derived
   label. Paste-back is unaffected — the real `plain` is always what's copied.
   Full design: [`name-pinned-clip.md`](name-pinned-clip.md).
+
+> **At-rest storage is not encrypted — by design in v1.** Cloaking is a
+> *visual* measure: `customLabel` hides a secret from the menu bar and Settings
+> list, but the payload is stored as plaintext in the store above
+> (`~/Library/Application Support/Maclippy/Maclippy.store`), readable by anything
+> running as your user (e.g. `sqlite3 … "SELECT ZPLAIN FROM ZCLIP"`). This is an accepted v1
+> trade-off (KISS; no Keychain/crypto dependency), **not** an oversight. If you
+> store passwords in a cloaked clip, understand they live unencrypted at rest —
+> the concealed-item filter (§4.6) and Pause (§4.5) exist so most secrets never
+> enter the store in the first place. Encrypting the payload is a tracked future
+> item (see [`roadmap.md`](roadmap.md)).
+
+### Inspecting the store (developers)
+
+The store is a plain SQLite file — inspect it with the `sqlite3` CLI while the app
+is running (WAL mode allows concurrent reads). The one entity, `Clip`, maps to
+table **`ZCLIP`**; the `Z`/`Z_` prefixes are Core Data's (SwiftData is built on
+it), and each attribute is a `Z`-prefixed column (`ZPLAIN`, `ZPINNED`,
+`ZCUSTOMLABEL`, …). The other tables (`Z_PRIMARYKEY`, `Z_METADATA`, `ACHANGE`,
+`ATRANSACTION`, …) are framework bookkeeping and persistent-history tracking — not
+ours.
+
+```sh
+DB=~/Library/"Application Support"/Maclippy/Maclippy.store
+
+sqlite3 "$DB" ".tables"                 # list tables
+sqlite3 "$DB" ".schema ZCLIP"           # column layout
+sqlite3 "$DB" "SELECT count(*) FROM ZCLIP;"
+
+# pinned first, then recent; preview the (plaintext) payload
+sqlite3 -header -column "$DB" \
+  "SELECT ZPINNED AS pin, ZPINNEDORDER AS ord, COALESCE(ZCUSTOMLABEL,'') AS label,
+          substr(ZPLAIN,1,60) AS preview
+   FROM ZCLIP ORDER BY ZPINNED DESC, ZPINNEDORDER, ZDATERECORDED DESC;"
+```
+
+Read-only is safe; **don't write** to the store behind the app — SwiftData owns
+the schema and won't see external mutations. Note `SELECT ZPLAIN …` returns
+cloaked values in cleartext, which is the at-rest exposure described above.
 
 ---
 
@@ -296,6 +356,25 @@ current value is the default it would ship with.
 | Max clip size | 2 MB | Guardrail, not a knob (see §4.3). |
 | Capture on launch | Always on; pause state not persisted | A forgotten pause must not disable the app (see §4.5). |
 | Paste format | Faithful — all stored representations | *What you copied is what you paste* (see §4.2). |
+
+### Limits (reference)
+
+Every numeric cap in one place. All hardcoded except history size.
+
+| Limit | Value | Constant / source |
+|---|---|---|
+| Menu row label | 36 chars + `…` | `ClipMenu.maxItemLength` |
+| Tooltip peek | 500 chars + `…`, verbatim (real newlines) | `ClipMenu.maxPeekLength` |
+| Reveal scan bound | ≤ 1024 chars of `plain` processed | `Clip.maxRevealChars` (§5) |
+| Clips-tab row label | single line, view-truncated | `.lineLimit(1)` |
+| `customLabel` (cloak name) | 80 chars | `Clip.maxLabelLength` |
+| `displayTitle` (rename seed) | 80 chars, first line, trimmed | `Clip.maxLabelLength` |
+| Max clip payload | 2 MB (degrade, don't truncate) | §4.3 |
+| History size | 0–99, default 20; 0 = unlimited | Preference (§7 General) |
+| Poll interval | 0.3s | §4.1 |
+
+The 500 (tooltip) and 1024 (reveal scan) caps are performance bounds — they cap
+work, not what a clip may contain; a clip's full payload is always pasted intact.
 
 ---
 

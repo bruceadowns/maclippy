@@ -26,6 +26,29 @@ must earn its place, and "defer, don't pre-build" is the default.
    feature. Options and the recommended path are in
    [Distribution options](#distribution-options) below.
 
+## Hardening & engineering health
+
+Not user-facing features — the two gaps most worth closing before the codebase
+grows. Neither is in SPEC §9; both are called out here so they aren't forgotten.
+
+- **Encrypt cloaked payloads at rest.** The named-clip feature (SPEC §6,
+  [`name-pinned-clip.md`](name-pinned-clip.md)) invites users to stash a password
+  behind a label, but the cloak is *visual only* — the SwiftData store is
+  plaintext on disk. v1 documents this as an accepted trade-off (SPEC §6 note),
+  which is honest but thin the moment a non-developer trusts it with a real
+  secret. The fix that keeps KISS: store the payload of a `customLabel`'d clip in
+  the **Keychain**, keyed by the clip's `id`, and keep only the reference in
+  SwiftData — no crypto code, no new dependency, and scoped to just the clips a
+  user deliberately cloaked. Do this before promoting the cloak feature to any
+  non-developer audience (i.e. alongside the distribution work below).
+- **A minimal test target.** There is none today (see `CLAUDE.md`). The capture
+  pipeline holds the fiddly invariants most likely to regress silently in a
+  refactor — de-dupe by verbatim `plain`, the 2 MB degrade-don't-truncate ladder
+  (SPEC §4.3), trim-with-pinned-exempt (SPEC §4.4). A small XCTest target over
+  that pure-ish logic is insurance, not ceremony. Best sequenced **just before**
+  the search + picker work (#2 above), which is the change most likely to disturb
+  the pipeline.
+
 ## Tempting — defer hard or skip
 
 - **Auto-paste into the active app.** Costs an Accessibility permission and
