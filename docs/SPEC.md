@@ -282,6 +282,34 @@ final class Clip {
 > enter the store in the first place. Encrypting the payload is a tracked future
 > item (see [`roadmap.md`](roadmap.md)).
 
+### Inspecting the store (developers)
+
+The store is a plain SQLite file — inspect it with the `sqlite3` CLI while the app
+is running (WAL mode allows concurrent reads). The one entity, `Clip`, maps to
+table **`ZCLIP`**; the `Z`/`Z_` prefixes are Core Data's (SwiftData is built on
+it), and each attribute is a `Z`-prefixed column (`ZPLAIN`, `ZPINNED`,
+`ZCUSTOMLABEL`, …). The other tables (`Z_PRIMARYKEY`, `Z_METADATA`, `ACHANGE`,
+`ATRANSACTION`, …) are framework bookkeeping and persistent-history tracking — not
+ours.
+
+```sh
+DB=~/Library/"Application Support"/Maclippy/Maclippy.store
+
+sqlite3 "$DB" ".tables"                 # list tables
+sqlite3 "$DB" ".schema ZCLIP"           # column layout
+sqlite3 "$DB" "SELECT count(*) FROM ZCLIP;"
+
+# pinned first, then recent; preview the (plaintext) payload
+sqlite3 -header -column "$DB" \
+  "SELECT ZPINNED AS pin, ZPINNEDORDER AS ord, COALESCE(ZCUSTOMLABEL,'') AS label,
+          substr(ZPLAIN,1,60) AS preview
+   FROM ZCLIP ORDER BY ZPINNED DESC, ZPINNEDORDER, ZDATERECORDED DESC;"
+```
+
+Read-only is safe; **don't write** to the store behind the app — SwiftData owns
+the schema and won't see external mutations. Note `SELECT ZPLAIN …` returns
+cloaked values in cleartext, which is the at-rest exposure described above.
+
 ---
 
 ## 7. Preferences
