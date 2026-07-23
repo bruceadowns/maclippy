@@ -17,6 +17,7 @@ Day-to-day development is Xcode (⌘R). The `Makefile` wraps the CLI equivalents
 - `make lint` — `swiftlint lint --strict` (requires `brew install swiftlint`)
 - `make install` — Release build → replace `~/Applications/Maclippy.app` → relaunch
 - `make clean` — remove `build/`
+- `make inc-ver` — bump the build number (`agvtool next-version`, no `-all` — the project has no `Info.plist` to write, it's generated)
 
 There is **no test target** and no tests yet — `make test` does not exist. Ad-hoc signing (`CODE_SIGN_IDENTITY = "-"`) means a fresh clone builds with no Apple ID, certificate, or team.
 
@@ -24,7 +25,7 @@ There is **no test target** and no tests yet — `make test` does not exist. Ad-
 
 Two SwiftUI scenes in `MaclippyApp.swift`, both attached to one shared `ModelContainer`: a `MenuBarExtra` (`.menu` style) hosting `ClipMenu`, and a `Settings` scene hosting `SettingsView` (General + Clips tabs). A single `ClipboardMonitor` is created at launch with the container's `mainContext` and injected into both.
 
-The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle` + optional `customLabel`). Payloads are stored inline; text-only in v1. `customLabel` is a user-set name that cloaks a **pinned** clip's content in the UI (e.g. a password), set/cleared only via the Clips tab; see `docs/name-pinned-clip.md`.
+The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle` + optional `customLabel`). Payloads are stored inline; text-only in v1. The container is given an explicit `ModelConfiguration` URL so the store is namespaced at `~/Library/Application Support/Maclippy/Maclippy.store` rather than SwiftData's bare `default.store`. `customLabel` is a user-set name that cloaks a **pinned** clip's content in the UI (e.g. a password), set/cleared only via the Clips tab; see `docs/name-pinned-clip.md`. **Cloaking is visual only — the payload is plaintext at rest** (SPEC §6); encrypting it is a tracked roadmap item.
 
 ### The central quirk: the menu does NOT use `@Query`
 

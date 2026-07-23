@@ -11,7 +11,8 @@ struct MaclippyApp: App {
         Preferences.registerDefaults()
         let container: ModelContainer
         do {
-            container = try ModelContainer(for: Clip.self)
+            let config = ModelConfiguration(url: Self.storeURL())
+            container = try ModelContainer(for: Clip.self, configurations: config)
         } catch {
             fatalError("Failed to create the data store: \(error)")
         }
@@ -34,6 +35,17 @@ struct MaclippyApp: App {
             SettingsView(monitor: monitor)
         }
         .modelContainer(container)
+    }
+
+    // Namespaced store under Application Support/Maclippy/ instead of SwiftData's
+    // bare `default.store` in the shared root (which collides by name with any
+    // other SwiftData app).
+    private static func storeURL() -> URL {
+        let fm = FileManager.default
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = appSupport.appendingPathComponent("Maclippy", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("Maclippy.store")
     }
 
     private static func menuBarIcon(paused: Bool) -> NSImage {
