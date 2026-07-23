@@ -152,17 +152,16 @@ No tests (no test target). No new assets — stock SF Symbols only.
 - **Backward (rolling back to a pre-feature build): unsupported — it crashes.**
   Once a newer build opens the store, SwiftData migrates its schema and the
   `Clip` entity's version hash changes. An older binary's model no longer
-  matches, so `ModelContainer(for: Clip.self)` throws
-  `NSPersistentStoreIncompatibleVersionHashError`; the `catch` in
-  `MaclippyApp.init()` is a `fatalError`, so the old app dies on launch. (This
-  `fatalError` predates the feature — backward rollback was never supported.)
-  Any names set under the new schema are lost regardless, as the old schema has
-  no column for them.
+  matches, so building the `ModelContainer` (`MaclippyApp.init()`) throws
+  `NSPersistentStoreIncompatibleVersionHashError`; the `catch` there is a
+  `fatalError`, so the old app dies on launch. (This `fatalError` predates the
+  feature — backward rollback was never supported.) Any names set under the new
+  schema are lost regardless, as the old schema has no column for them.
 
   **Workaround:** delete the store and relaunch (loses clip history):
 
   ```sh
-  rm -rf ~/Library/Application\ Support/*/default.store*   # in the app's container
+  rm -rf ~/Library/Application\ Support/Maclippy/Maclippy.store*
   ```
 
   Left as-is deliberately: softening the `fatalError` to recreate the store on

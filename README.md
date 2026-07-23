@@ -17,7 +17,11 @@ hotkeys to learn, no modes, no dependencies. *What you copied is what you paste.
 - **Pinned** clips kept in their own section, never auto-evicted.
 - **Name a pinned clip to cloak it** — give a pinned clip a custom name (e.g. for
   a password) and the menu shows that name, marked with a 🔑, instead of the
-  value. Pasting still copies the real content.
+  value. Pasting still copies the real content. Cloaking is a *visual* measure
+  only — the value is stored **unencrypted** on disk (see the note below).
+- **Hover to peek** — a clip too long for its row shows its full text (up to 500
+  chars, real line breaks) in a tooltip on hover, so you can read it without
+  pasting. A cloaked clip peeks its name only, never its hidden value.
 - **Pause** capture with one click (e.g. before copying a password), with the
   menu-bar icon reflecting the paused state.
 - Skips items apps mark as sensitive (password managers, etc.).
@@ -27,8 +31,16 @@ hotkeys to learn, no modes, no dependencies. *What you copied is what you paste.
   (pin, rename, reorder, delete).
 - **About** panel with version and a link to the project.
 
-> Menu-bar clip titles are truncated to 36 characters. This is currently
-> hard-coded (`ClipMenu.maxItemLength`) and not yet a user preference.
+> Menu-bar clip titles are truncated to 36 characters (hover a clipped one to
+> peek the rest). This is currently hard-coded (`ClipMenu.maxItemLength`) and not
+> yet a user preference.
+
+> **Your clips are stored unencrypted.** History lives in a plain SQLite
+> database at `~/Library/Application Support/Maclippy/Maclippy.store`, readable by
+> anything running as your user. The cloak (🔑) hides a value in the UI, **not**
+> on disk. Keep real secrets out of the store — use **Pause** before copying
+> them, and rely on the sensitive-item skip — rather than trusting the cloak.
+> Encrypting stored values is a planned improvement (see the roadmap).
 
 ## Requirements
 
@@ -50,22 +62,18 @@ The app appears in the menu bar — it has no Dock icon or main window.
 
 ## Install to ~/Applications
 
-To build a standalone copy and keep it around, build the Release configuration
-and copy the app bundle:
+To build a standalone copy and keep it around, use the `Makefile`:
 
 ```sh
-xcodebuild -scheme Maclippy -configuration Release -derivedDataPath build build
-cp -R build/Build/Products/Release/Maclippy.app ~/Applications/
+make install
 ```
 
-Then launch it:
+This builds the Release configuration, replaces any copy in `~/Applications`,
+and relaunches it. Because you built it locally (ad-hoc signed, no quarantine
+flag), it launches without Gatekeeper prompts. To update, `git pull` and repeat.
 
-```sh
-open ~/Applications/Maclippy.app
-```
-
-Because you built it locally (ad-hoc signed, no quarantine flag), it launches
-without Gatekeeper prompts. To update, `git pull` and repeat.
+Other targets: `make run` (Debug build + launch), `make build`, `make lint`,
+`make clean`. Run `make help` for the full list.
 
 > The app is ad-hoc signed for local use only — it runs on the Mac that built it,
 > not as a binary you can hand to someone else. A signed, notarized, downloadable
