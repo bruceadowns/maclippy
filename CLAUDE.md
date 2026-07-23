@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Maclippy is a macOS **menu-bar-only** clipboard manager (SwiftUI + SwiftData, macOS 14+, zero third-party dependencies). It polls the system pasteboard, stores recent text clips, and re-copies a chosen clip on click. `LSUIElement = 1` — no Dock icon, no main window.
 
-**`SPEC.md` is the design source of truth.** It documents the KISS philosophy and every deliberately-hardcoded value (poll interval, 2 MB max clip, etc.). Read it before adding behavior or turning a constant into a preference — many "missing" knobs are intentional, and §9 lists what's explicitly out of scope.
+**`docs/SPEC.md` is the design source of truth.** It documents the KISS philosophy and every deliberately-hardcoded value (poll interval, 2 MB max clip, etc.). Read it before adding behavior or turning a constant into a preference — many "missing" knobs are intentional, and §9 lists what's explicitly out of scope. Per-feature specs live alongside it in `docs/`.
 
 ## Commands
 
@@ -24,7 +24,7 @@ There is **no test target** and no tests yet — `make test` does not exist. Ad-
 
 Two SwiftUI scenes in `MaclippyApp.swift`, both attached to one shared `ModelContainer`: a `MenuBarExtra` (`.menu` style) hosting `ClipMenu`, and a `Settings` scene hosting `SettingsView` (General + Clips tabs). A single `ClipboardMonitor` is created at launch with the container's `mainContext` and injected into both.
 
-The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle`). Payloads are stored inline; text-only in v1.
+The one `@Model` is `Clip` (plain + optional rtf/html + `pinned`/`pinnedOrder`/`dateRecorded`/`displayTitle` + optional `customLabel`). Payloads are stored inline; text-only in v1. `customLabel` is a user-set name that cloaks a **pinned** clip's content in the UI (e.g. a password), set/cleared only via the Clips tab; see `docs/name-pinned-clip.md`.
 
 ### The central quirk: the menu does NOT use `@Query`
 
@@ -47,11 +47,11 @@ macOS has no clipboard-change notification, so a 0.3s `Timer` polls `NSPasteboar
 
 ### Preferences
 
-User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Preferences.swift`. History size is a 0–99 stepper where **0 means unlimited** (`trim()` no-ops); lowering it calls `monitor.enforceHistoryLimit()` to trim immediately. Everything in `SPEC.md` §7 "Not exposed" is hardcoded on purpose.
+User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Preferences.swift`. History size is a 0–99 stepper where **0 means unlimited** (`trim()` no-ops); lowering it calls `monitor.enforceHistoryLimit()` to trim immediately. Everything in `docs/SPEC.md` §7 "Not exposed" is hardcoded on purpose.
 
 ## Conventions
 
-- **Menu labels** are built from `clip.plain` via `ClipMenu`, truncated to `maxItemLength` (36); tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical.
+- **Labels** for unnamed clips come from `Clip.revealedPlain` — tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical. Shared by the menu (`ClipMenu`, further truncated to `maxItemLength` 36) and the Clips tab, so they label identically. `displayTitle` is now only the clean seed for the rename field, not a row label. A pinned clip with a `customLabel` instead shows that name (no whitespace-reveal) with a `key.fill` glyph, in both the menu and the Clips tab.
 - **Comments**: explain non-obvious *why* only; no narration comments.
 
 ## Git workflow

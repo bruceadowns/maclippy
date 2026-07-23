@@ -119,6 +119,9 @@ gracefully — **never truncate**:
 - **Pinned:** a separate section, always shown above recent, ordered by
   `pinnedOrder`.
 - **Pinned items are never auto-evicted** and are exempt from Clear History.
+- **Unpinning bumps recency:** an unpinned clip re-enters Recent at the top
+  (`dateRecorded = .now`), like reuse — so it isn't dropped at its stale age
+  where trimming would evict it immediately.
 - **History trimming:** when recent-clip count exceeds the configured history
   size, evict oldest first. Pinned excluded from the count and from eviction.
 
@@ -167,7 +170,8 @@ gracefully — **never truncate**:
 
 ```
 Clear Formatting                  ← acts on the current clipboard
-─────────────────────────         ← divider: action │ clips
+Pause Maclippy                    ← "Resume Maclippy" while paused
+─────────────────────────         ← divider: commands │ clips
 📌 Pinned                         ← click-to-paste; not editable here
    • Work email signature
    • Standup message
@@ -176,37 +180,42 @@ Clear Formatting                  ← acts on the current clipboard
    • clip just now
    • clip a minute ago
    • …
-─────────────────────────         ← divider: clips │ actions
-Pause Maclippy                    ← "Resume Maclippy" while paused
-Clear Unpinned History…
+─────────────────────────         ← divider: clips │ app
+About Maclippy                    ← system standard About panel
 Preferences…
 Quit Maclippy
 ```
 
-- Three dividers: **Clear Formatting ↔ clips**, **pinned ↔ recent**, and **clips ↔ actions**.
-- Rows are pure click-to-paste. Pin/unpin/reorder/delete happen in Preferences,
-  not in the menu (a plain `NSMenu` item can't both fire an action and host a
-  submenu).
-- **Ellipsis convention:** items opening a dialog get `…` (`Clear Unpinned
-  History…`, `Preferences…`). Immediate actions do not (`Pause`, `Clear
-  Formatting`, `Quit`).
+- Three dividers: **commands ↔ clips**, **pinned ↔ recent**, and **clips ↔ app**.
+- **Top = act now, middle = pick a clip, bottom = app.** The two safe, frequent
+  commands (Clear Formatting, Pause) sit at the top for quick access; the bottom
+  is the standard macOS trio (About / Preferences / Quit).
+- **Clear Unpinned History is not in the menu.** It's destructive, rare, and
+  undo-less, so it lives only in Preferences → General (§7) with a confirm —
+  deliberately not one careless click away in the primary menu.
+- Rows are pure click-to-paste. Pin/unpin/rename/reorder/delete happen in
+  Preferences, not in the menu (a plain `NSMenu` item can't both fire an action
+  and host a submenu).
+- **Ellipsis convention:** items opening a dialog get `…` (`Preferences…`).
+  Immediate actions do not (`Pause`, `Clear Formatting`, `Quit`). **Exception:**
+  `About Maclippy` opens the standard About panel but takes no `…`, per Apple's
+  convention for "About <App>". See [`about-panel.md`](about-panel.md).
 - **Empty states:**
   - No pinned items → hide the Pinned section **and** its divider; menu opens
     straight into Recent.
   - No clips at all → a disabled `No clips yet` placeholder row.
 - **Dividers-only** — no text header rows. The pin glyph signals the pinned zone;
-  dividers separate pinned ↔ recent ↔ actions. Keeps the menu compact.
+  dividers separate commands ↔ pinned ↔ recent ↔ app. Keeps the menu compact.
 - **Row labels** derive from `plain`, truncated to **36 characters**
   (`ClipMenu.maxItemLength`, hard-coded) with a trailing `…`. Leading/trailing
   whitespace is revealed with glyphs (`·` space, `⇥` tab, `⏎` newline) so
   verbatim-distinct clips don't render identically; interior whitespace stays
-  literal.
-
-### 5.1 Clear Unpinned History
-
-- Clears the **Recent** list only; **pinned always survives**.
-- Shows a confirmation dialog before clearing:
-  `"Clear recent clips?" — "Pinned items are kept."  [Clear] [Cancel]`
+  literal. The reveal is `Clip.revealedPlain`, shared with the Clips tab (§7) so
+  the two surfaces label identically.
+- A pinned clip with a `customLabel` (§6) shows that name instead — truncated
+  the same way, no whitespace-reveal, prefixed with a `key.fill` glyph marking it
+  as a named item. Cloaking means the plaintext is never shown (§6); the key
+  reveals nothing about the content.
 
 ---
 
@@ -219,7 +228,8 @@ final class Clip {
     var dateRecorded: Date
     var pinned: Bool
     var pinnedOrder: Int        // ordering among pinned items
-    var displayTitle: String    // cleaned label shown in the menu
+    var displayTitle: String    // cleaned text; seeds the rename field
+    var customLabel: String?    // user-set name that cloaks content (pinned only)
     var plain: String           // always present
     var rtf: Data?              // optional rich representation
     var html: String?           // optional rich representation
@@ -228,9 +238,17 @@ final class Clip {
 
 - Text-only in v1 — no images, no files. Small payloads, stored inline (no
   external blob files).
-- `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars) and
-  labels the **Settings clips list**. The **menu** builds its own label from
-  `plain` live (whitespace-revealed, 36-char — see §5).
+- `displayTitle` is derived from `plain` (trimmed, first line, ≤80 chars). It's
+  the **clean seed for the rename field** (and its placeholder) — never a row
+  label. Both the **menu** and the **Settings clips list** label unnamed clips
+  from `Clip.revealedPlain` (whitespace-revealed `plain`; the menu adds a 36-char
+  cap, the list relies on line truncation — see §5, §7), so the two agree.
+- `customLabel` is a user-set name that **replaces** the content-derived label in
+  both the menu and the clips list — its purpose is *cloaking* a stored secret
+  (e.g. a password) so the plaintext never shows in the menu bar. Set **only on
+  pinned clips**, cleared on unpin, capped at 80 chars. `nil` = show the derived
+  label. Paste-back is unaffected — the real `plain` is always what's copied.
+  Full design: [`name-pinned-clip.md`](name-pinned-clip.md).
 
 ---
 
@@ -245,11 +263,22 @@ SwiftUI `Settings` scene, a `TabView` with two tabs.
 - **Ignore concealed items** — toggle. Default **ON**.
 - **Launch at login** — toggle, backed by `SMAppService.mainApp`
   (`register()` / `unregister()`; reflect `.status` when the window appears).
-- **Clear History (except pinned)…** — button with confirm.
+- **Clear History (except pinned)…** — button with confirm. Clears the
+  **Recent** list only; **pinned always survives**. Confirmation dialog:
+  `"Clear recent clips?" — "Pinned items are kept."  [Clear] [Cancel]`. This is
+  the **only** place the action lives (not in the menu — see §5).
 
 ### Clips
-- List of all clips (pinned + recent).
-- **Pin / unpin.**
+- List of all clips (pinned + recent). Per-row actions are icon buttons with
+  tooltip help: **pin/unpin**, **rename** (pinned only), **delete**.
+- Row labels use `Clip.revealedPlain` — the same whitespace-reveal as the menu
+  (§5), so `"foo"` and `" foo "` read as distinct here too. A named clip shows
+  its `customLabel` verbatim (no reveal) with the `key.fill` glyph.
+- **Pin / unpin.** Unpinning clears any `customLabel` (§6).
+- **Rename** (pinned only) — sets a `customLabel` that cloaks the clip. The
+  pencil turns that one row's label into an inline field (one at a time),
+  committing on Enter or focus loss; empty reverts to the derived label. See
+  [`name-pinned-clip.md`](name-pinned-clip.md).
 - **Drag to reorder** pinned items.
 - **Delete** an individual clip (no confirm — single deletes are trivially
   re-copyable; only bulk Clear History confirms).
@@ -277,7 +306,7 @@ current value is the default it would ship with.
 - **`LICENSE`** — **MIT**.
 - **`.gitignore`** — standard Swift/Xcode (`build/`, `DerivedData/`,
   `xcuserdata/`, etc.).
-- **`SPEC.md`** — this document.
+- **`docs/SPEC.md`** — this document. Per-feature specs live alongside it in `docs/`.
 - **`Makefile`** — CLI wrappers for the Xcode build (`make build [CONFIG=Release]`,
   `run`, `lint`, `install`, `clean`).
 - **`CLAUDE.md`** — guidance for AI assistants working in the repo.

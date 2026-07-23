@@ -69,10 +69,15 @@ final class ClipboardMonitor {
         guard plain.utf8.count <= Self.maxClipBytes else { return }
 
         // Keep the list unique: re-copying existing content bumps it instead of
-        // adding a duplicate row.
-        if let existing = existingClip(with: plain) {
-            existing.dateRecorded = .now
-            save()
+        // adding a duplicate row. Fail closed — if the lookup itself errors we
+        // can't rule out a match, so skip rather than risk inserting a duplicate.
+        do {
+            if let existing = try existingClip(with: plain) {
+                existing.dateRecorded = .now
+                save()
+                return
+            }
+        } catch {
             return
         }
 
@@ -97,10 +102,12 @@ final class ClipboardMonitor {
         return total > Self.maxClipBytes
     }
 
-    private func existingClip(with plain: String) -> Clip? {
+    /// Throws on fetch failure so the caller can distinguish "no match"
+    /// (nil → safe to insert) from "couldn't tell" (throw → fail closed).
+    private func existingClip(with plain: String) throws -> Clip? {
         var descriptor = FetchDescriptor<Clip>(predicate: #Predicate { $0.plain == plain })
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return try context.fetch(descriptor).first
     }
 
     // MARK: - Paste-back

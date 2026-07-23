@@ -17,6 +17,33 @@ enum ClipActions {
         }
     }
 
+    /// Opens the system standard About panel. Icon/name/version come from the
+    /// bundle (copyright from `Info.plist` `NSHumanReadableCopyright`); we add a
+    /// short credit line with a clickable repo link.
+    static func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationIcon: appIcon(),
+            .credits: aboutCredits()
+        ])
+    }
+
+    private static func aboutCredits() -> NSAttributedString {
+        let repo = "https://github.com/bruceadowns/maclippy"
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let base: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .paragraphStyle: paragraph
+        ]
+        let credits = NSMutableAttributedString(string: "A menu-bar clipboard manager.\n", attributes: base)
+        credits.append(NSAttributedString(
+            string: repo,
+            attributes: base.merging([.link: URL(string: repo)!]) { _, new in new }
+        ))
+        return credits
+    }
+
     private static func appIcon(size: CGFloat = 128) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
             let teal = NSColor(srgbRed: 0.059, green: 0.710, blue: 0.682, alpha: 1.0)

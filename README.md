@@ -15,10 +15,17 @@ hotkeys to learn, no modes, no dependencies. *What you copied is what you paste.
   clipboard.
 - Recent-clip history with a configurable size.
 - **Pinned** clips kept in their own section, never auto-evicted.
+- **Name a pinned clip to cloak it** — give a pinned clip a custom name (e.g. for
+  a password) and the menu shows that name, marked with a 🔑, instead of the
+  value. Pasting still copies the real content.
 - **Pause** capture with one click (e.g. before copying a password), with the
   menu-bar icon reflecting the paused state.
 - Skips items apps mark as sensitive (password managers, etc.).
-- Preferences for history size, privacy, launch-at-login, and clip management.
+- **Clear Formatting** — strip rich (RTF/HTML) styling from the current
+  clipboard so the next paste lands as plain text.
+- Preferences for history size, privacy, launch-at-login, and clip management
+  (pin, rename, reorder, delete).
+- **About** panel with version and a link to the project.
 
 > Menu-bar clip titles are truncated to 36 characters. This is currently
 > hard-coded (`ClipMenu.maxItemLength`) and not yet a user preference.
@@ -73,7 +80,17 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 
 ## Documentation
 
-See [`SPEC.md`](SPEC.md) for the full design specification and rationale.
+- [`docs/SPEC.md`](docs/SPEC.md) — full design specification and rationale.
+- [`docs/roadmap.md`](docs/roadmap.md) — where the project is headed after v1.
+- Per-feature specs live alongside it in [`docs/`](docs/):
+  [naming a pinned clip](docs/name-pinned-clip.md),
+  [the About panel](docs/about-panel.md).
+
+## Inspiration
+
+The menu-bar-only, click-to-paste design takes cues from **CopyClip** by
+FIPLAB — a long-running Mac clipboard manager that lives entirely in the menu
+bar.
 
 ## License
 
