@@ -9,7 +9,7 @@ APP          := $(DERIVED_DATA)/Build/Products/$(CONFIG)/Maclippy.app
 RELEASE_APP  := $(DERIVED_DATA)/Build/Products/Release/Maclippy.app
 INSTALL_DIR  := $(HOME)/Applications
 
-.PHONY: help build release run lint install clean open
+.PHONY: help build release run lint install clean open inc-ver
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | \
@@ -38,6 +38,9 @@ lint: ## Run SwiftLint --strict (brew install swiftlint)
 
 clean: ## Remove build artifacts
 	rm -rf $(DERIVED_DATA)
+
+inc-ver: ## Bump CURRENT_PROJECT_VERSION (build number) by 1
+	agvtool next-version
 
 open: ## Open the project in Xcode
 	open $(PROJECT)
