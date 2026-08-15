@@ -124,7 +124,7 @@ once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
 | 8 | Convert box-drawing tables to Markdown | §5.1 |
 | 9 | Flatten punctuation | §7 flatten table |
 | 10 | Collapse any run of blank lines to 1 | whitespace-only counts as blank |
-| 11 | Trim leading/trailing blank lines | a final line feed is preserved if the input had one |
+| 11 | Trim leading/trailing blank lines | output always ends with exactly one line feed |
 
 **Order carries three real constraints**, which a flat list makes look
 interchangeable when it is not:

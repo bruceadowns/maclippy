@@ -76,10 +76,11 @@ enum Reformat {
         lines = lines.map(flattenPunctuation)                           // 9
         let body = trimBlanks(collapseBlankRuns(lines)).joined(separator: "\n")  // 10, 11
 
-        // A final line feed is preserved, not imposed. Forcing one would execute
-        // the text when pasted into a shell; dropping one the user had would be a
-        // silent edit. Any run of trailing blank lines has already collapsed.
-        return input.hasSuffix("\n") ? body + "\n" : body
+        // Output always terminates with a line feed, whether or not the input
+        // did. Runs of trailing blank lines have already collapsed, so this is
+        // exactly one. Code takes the guardrail's early return above and is not
+        // given one — that path is byte-identical by contract.
+        return body + "\n"
     }
 }
 
