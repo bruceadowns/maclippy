@@ -66,9 +66,7 @@ enum Reformat {
         let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) && !isQuote($0) }
         let wordsPerLine = measurable.isEmpty ? 0
             : Double(measurable.reduce(0) { $0 + $1.split(separator: " ").count }) / Double(measurable.count)
-        guard wordsPerLine >= minWordsPerLine else {
-            return String(input.reversed().drop { $0 == "\n" }.reversed())
-        }
+        guard wordsPerLine >= minWordsPerLine else { return input }  // verbatim
 
         let width = estimateWidth(lines)                                // 5
         let joins = width.map { forcedBreaks(lines, width: $0) } ?? []  // 6
@@ -76,7 +74,12 @@ enum Reformat {
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
         lines = lines.map(flattenPunctuation)                           // 9
-        return trimBlanks(collapseBlankRuns(lines)).joined(separator: "\n")  // 10, 11
+        let body = trimBlanks(collapseBlankRuns(lines)).joined(separator: "\n")  // 10, 11
+
+        // A final line feed is preserved, not imposed. Forcing one would execute
+        // the text when pasted into a shell; dropping one the user had would be a
+        // silent edit. Any run of trailing blank lines has already collapsed.
+        return input.hasSuffix("\n") ? body + "\n" : body
     }
 }
 

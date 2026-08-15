@@ -34,12 +34,11 @@ enum ReformatCheck {
     static func check(_ name: String) -> Bool {
         let stem = String(name.dropLast(7))
         guard let input = read("\(fixtures)/\(name)"),
-              let expectedRaw = read("\(fixtures)/\(stem).out.txt") else {
+              let expected = read("\(fixtures)/\(stem).out.txt") else {
             print("MISSING  \(stem) — no .out.txt")
             return false
         }
 
-        let expected = trimTrailingNewlines(expectedRaw)
         let actual = Reformat.apply(input)
         // Idempotency is the property this design actually fails at, and three of
         // its defects produced correct-looking first-pass output. Check both.
@@ -76,11 +75,6 @@ enum ReformatCheck {
 
     static func read(_ path: String) -> String? {
         try? String(contentsOfFile: path, encoding: .utf8)
-    }
-
-    /// Trailing newlines are a file convention, not part of the transform.
-    static func trimTrailingNewlines(_ s: String) -> String {
-        String(s.reversed().drop { $0 == "\n" }.reversed())
     }
 
     static func nonBlank(_ s: String) -> Int {
