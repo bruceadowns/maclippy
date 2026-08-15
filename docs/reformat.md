@@ -545,6 +545,28 @@ either direction, nor broke idempotency:
   every case it would have. Four alternatives that between them permitted
   everything is a guard that guards nothing.
 
+### 6.4 Dedent
+
+Stage 7 removes the common leading indent, stripping `min(lineIndent, amount)` so
+no line ever loses whitespace it does not have. Two rules keep the margin honest,
+each forced by a real paste.
+
+**A minimum held by exactly one line is a paste artifact, not a margin.** Terminal
+selections routinely miss the first line's indent, leaving it flush while
+everything below sits at 2. Fixture 9 opens that way. Dedent ignores a
+single-line minimum and uses the next smallest.
+
+**Only lines dedent can act on are measured.** Quote lines and table rules keep
+their own margin, so they are excluded from the computation entirely. Fixture 17
+is why: an already-reformatted transcript containing `> shorten sentences`,
+`> exit` and two horizontal rules has *four* lines at column 0 — neither a lone
+artifact nor a genuine margin. They pinned the common prefix to zero and left
+every paragraph indented by 2.
+
+Note the interaction: the first rule requires *exactly one* line at the minimum,
+so it cannot cover the second case. They are separate rules because they fail in
+separate ways.
+
 ## 7. Substitution tables
 
 ### Markers
