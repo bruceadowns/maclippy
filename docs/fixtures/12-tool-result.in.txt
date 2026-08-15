@@ -1,0 +1,21 @@
+⏺ Confirmed: 10 quote lines in, 10 out — 1:1, no unwrapping.
+
+  The four DIFF lines are content-level, not structural. Verifying they're only flatten and whitespace:
+
+⏺ Bash(python3 -c "
+      import re…)
+  ⎿  line 1: explained by flatten+rstrip alone -> True
+     line 2: explained by flatten+rstrip alone -> True
+     line 7: explained by flatten+rstrip alone -> True
+     line 9: explained by flatten+rstrip alone -> True
+
+⏺ Confirmed on both counts.
+
+  Structure: 10 quote lines in, 10 out. Every line break inside the blockquote is preserved exactly — no joining.
+
+  Content: all four changed lines are explained entirely by punctuation flattening (— → -) and trailing-whitespace removal. Nothing else touches quote content.
+
+  So a quote block gets exactly two things: the gutter normalized from ▎ to > , and the same character-level flattening applied to every other line. Its line structure is untouched, and it's excluded from
+  width estimation and the words-per-line measure so it can't influence how the surrounding prose is unwrapped either.
+
+✻ Brewed for 25s

@@ -1,0 +1,9 @@
+MongoClient consolidation
+
+- ~2,100 connection threads drop to ~21 - and stay flat. Each client spawns 3 threads per Mongo server. At ~100 data types across 7 servers, that cost grew with every new data type. One shared client retires that growth permanently.
+- A global lock is gone. Every read and write serialized through one shared lock just to find its cached client. That capped concurrency regardless of hardware.
+- ~1,400 wasted connection cycles per instance per day eliminated. Two reliability defects fixed as well. The old code could silently drop a Mongo server after a brief blip and stay degraded for 12 hours.
+
+TLS (Logan Douglass, AFDL-61545)
+
+- Every Mongo connection is now encrypted on the new Enterprise stack. A per-environment flag allowed a staged rollout. Internal database errors no longer leak into API responses. Encryption also raised the per-client cost - each client built its own trust store and handshaked with every server - so consolidation collapses ~100 of those into one.

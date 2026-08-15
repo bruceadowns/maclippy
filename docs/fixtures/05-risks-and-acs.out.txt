@@ -1,0 +1,15 @@
+Risks and/or areas of concern:
+- Narrow behavior change: a geography field holding a non-String, non-Document value was previously kept (the old wrapper caught the ClassCastException from doc.getString and returned the document unfiltered) and is now dropped. Stored geometry that fails to parse was already dropped before this change, not kept.
+- equals starts working on history, closing the divergence opened by AFDL-62351.
+- Both changes reach production async AODR jobs with no udl-aodr diff to prompt review.
+- noGeoMatch is removed from a published artifact. No caller exists in udl, udl-aodr, component-library or securemessaging, but a consumer outside those would break.
+- component-library merge auto-triggers downstream pipelines; sequence the version bump.
+
+Acceptance Criteria:
+- HistoryUtils holds no reference to GeographyUtils.
+- The search region is resolved once per query in the streaming and count paths. The public four-argument checkGeography resolves per call by design, so AodrProcessor is unchanged in cost - it performs the same two parses per document it does today.
+- A history document whose stored geometry cannot be parsed is excluded from results.
+- Region filtering is unchanged for every collection that carries geography, and documents in collections without geography are untouched.
+- RegionSearch reports an unrecognized eval prefix without a caller inspecting raw text.
+- udl and udl-aodr build against the new version with no source changes.
+- AODR history geography filtering is verified against the new matcher.

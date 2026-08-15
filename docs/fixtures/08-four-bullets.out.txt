@@ -1,0 +1,5 @@
+- XDomainIngester.java:617 is a third call site alongside AbstractFacade and SigActFacadeREST, and the only one whose failure mode is a silent skip rather than a response.
+- Policy must stay parse-only there, since a rejection skips a write instead of surfacing an error.
+- 66691 needs a parse-only GeometryValidator reachable outside FacadeGeographySupport - a second @Produces on GeographySupportProducer, most likely - which is a decision shared by all three call sites, not specific to the
+ingester.
+- GeographyUtils.validateRegion survives 66691 regardless: createMongoGeo (:447) and getGeography (:473-475) call it internally. Worth correcting there if 66691 implies otherwise.

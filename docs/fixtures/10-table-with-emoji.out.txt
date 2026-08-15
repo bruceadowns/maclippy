@@ -1,0 +1,19 @@
+Three near-identical 22-line blocks that split an eval prefix by hand and validated through GeographyUtils collapse to four lines each calling validateRegionValue, which is new on FacadeGeographySupport and reuses RegionSearch.unrecognizedEval() rather than inferring a bad operator from a surviving underscore. The blocks still emit the tempRegionSearchWithEval/WithoutEval pair the downstream matcher consumes. Coverage goes from zero region tests on any history endpoint to filtering and rejection tests across five collections.
+
+Changes by area:
+- sdl/service - the three call sites, the isGeographyClass gate and a dead constant removed
+- sdl/service/geo - the new String entry point, validateRegionParam reduced to a wrapper
+- test-integration/services - region coverage on five ITs, four stale comments corrected
+- testdatafactory - new RegionHistoryTDF
+
+| File | Change | Summary |
+| --- | --- | --- |
+| AbstractHistoryFacade.java | 📝 modified | Three blocks ported; gate, dead locals and INVALID_GEO_EVAL_ERR_MSG removed |
+| FacadeGeographySupport.java | 📝 modified | validateRegionValue(String) added; unrecognized-eval check moved onto RegionSearch |
+| FacadeGeographySupportTest.java | 📝 modified | 4 tests on the raw-value path |
+| RegionHistoryTDF.java | ✨ added | Mongo history fixtures for poi and groundimagery |
+| POIIT.java | 📝 modified | Filtering, equals_ parity both sides, rejections on two endpoints |
+| GroundImageryIT.java | 📝 modified | The only regionText coverage |
+| SigActIT.java / WeatherReportIT.java | 📝 modified | Acceptance and rejection per facade |
+| LaunchIndicatorIT.java | 📝 modified | Rejection parity plus the accepted-but-unapplied pin |
+| FeatureAssessmentIT.java / SARObservationIT.java | 📝 modified | Comment corrections only |
