@@ -16,7 +16,12 @@ enum Reformat {
     /// Slack in the forced-break test; absorbs prose that only approximates a column.
     static let breakTolerance = 8
     /// A cluster smaller than this is coincidence, not evidence of a wrap column.
-    static let minClusterLines = 3
+    static let minClusterLines = 2
+    /// A line-initial token longer than this is a path, URL or identifier sitting
+    /// on its own line, never a word the wrapper pushed down. Absolute rather than
+    /// relative to `W`, because `W` grows once lines are joined — a `W`-relative
+    /// bound stops holding on a second pass.
+    static let maxAbsorbableToken = 100
     /// Above this share of lines exceeding W, the estimate is an artifact.
     static let maxExceedingW = 0.25
     /// Below this, the text is code rather than wrapped prose (§6.1).
@@ -134,12 +139,18 @@ private extension Reformat {
 
     /// Replaces a leading marker or quote gutter. Quote gutters normalize to
     /// `> `; markers become an equal-width replacement so columns are preserved.
+    ///
+    /// `❯` is the terminal prompt, not a rendered blockquote, so mapping it to
+    /// `> ` does invent markup — the one place §5.2's de-rendering argument does
+    /// not apply. It earns the exception structurally: a prompt is a discrete
+    /// utterance that must never merge into neighbouring prose, and quote lines
+    /// are the only kind the unwrapper will not touch.
     static func substituteGutter(_ line: String) -> String {
         let pad = String(repeating: " ", count: line.indentWidth)
         let body = line.drop { $0 == " " }
         guard let first = body.first else { return line }
 
-        if first == "▎" || first == "┃" || first == ">" {
+        if first == "▎" || first == "┃" || first == ">" || first == "❯" {
             let rest = body.dropFirst().drop { $0 == " " }
             return rest.isEmpty ? pad + ">" : pad + "> " + rest
         }
@@ -152,9 +163,10 @@ private extension Reformat {
     // MARK: - Stage 5 — wrap width (§6.1)
 
     /// Gap-clusters line lengths and returns the **highest** cluster holding at
-    /// least `minClusterLines`. Highest rather than most populous: a wrapper puts
-    /// lines *at* its column and never above it, while short lines (headers,
-    /// labels, tails) outnumber wrapped ones in any structured document.
+    /// least `minClusterLines` **and** survives the exceed check. Highest rather
+    /// than most populous: a wrapper puts lines *at* its column and never above
+    /// it, while short lines (headers, labels, tails) outnumber wrapped ones in
+    /// any structured document.
     static func estimateWidth(_ lines: [String]) -> Int? {
         let lengths = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }.map(\.count)
         guard lengths.count >= 2 else { return nil }
@@ -167,14 +179,19 @@ private extension Reformat {
                 clusters.append([value])
             }
         }
-        let populated = clusters.filter { cluster in
+        // Walk candidates highest-first and take the first that survives both
+        // checks. Picking one and giving up when it fails loses the real column
+        // whenever short lines happen to form a bigger cluster than the wrapped
+        // ones — which is common when only a couple of lines actually wrapped.
+        for cluster in clusters.sorted(by: { $0.max()! > $1.max()! }) {
             let lo = cluster.min()!, hi = cluster.max()!
-            return lengths.filter { $0 >= lo && $0 <= hi }.count >= minClusterLines
+            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else { continue }
+            let candidate = hi
+            guard Double(lengths.filter { $0 > candidate }.count)
+                <= maxExceedingW * Double(lengths.count) else { continue }
+            return candidate
         }
-        guard let best = populated.map({ $0.max()! }).max() else { return nil }
-        guard Double(lengths.filter { $0 > best }.count) <= maxExceedingW * Double(lengths.count)
-        else { return nil }
-        return best
+        return nil
     }
 
     // MARK: - Stage 6 — unwrapping (§6.2, §6.3)
@@ -199,7 +216,7 @@ private extension Reformat {
             }
 
             let nextWord = b.trimmed.split(separator: " ").first.map(String.init) ?? ""
-            guard nextWord.count <= width else { continue }   // a token that fits nowhere proves nothing
+            guard nextWord.count <= maxAbsorbableToken else { continue }
             if a.count + 1 + nextWord.count > width - breakTolerance { result.append(i) }
         }
         return result
@@ -227,7 +244,12 @@ private extension Reformat {
     /// a paste artifact — terminal selections routinely miss the first line's
     /// indent — so the next smallest is used instead.
     static func dedent(_ lines: [String]) -> [String] {
-        let indents = lines.filter { !$0.trimmed.isEmpty }.map(\.indentWidth)
+        // Quote lines and table rules keep their own margin, so they must not
+        // set the one for prose — a `>` line at column 0 would otherwise pin the
+        // common prefix to zero and leave every paragraph indented.
+        let indents = lines
+            .filter { !$0.trimmed.isEmpty && !isQuote($0) && !isTable($0) }
+            .map(\.indentWidth)
         guard let smallest = indents.min() else { return lines }
         let unique = Set(indents).sorted()
         let amount = (unique.count > 1 && indents.filter { $0 == smallest }.count == 1)

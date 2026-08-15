@@ -312,8 +312,8 @@ corpus spans 93 to 232 (§8), so no constant is possible.
    `wcwidth` table: real complexity for a case no fixture exhibits.
 2. Sort descending, group where the gap between adjacent distinct values is
    ≤ **8**.
-3. Pick the **highest** group holding at least 3 lines — not the group with the
-   most lines.
+3. Walk groups **highest first** and take the first that holds at least 2 lines
+   *and* survives the exceed check below — not the group with the most lines.
 4. `W` = that group's maximum.
 5. **Reject the estimate entirely** — skip unwrapping — if either check fails:
    - more than **25%** of measurable lines exceed `W`. A greedy wrapper never
@@ -405,12 +405,18 @@ in any structured document. Fixture 13's true column is a 3-line cluster at
 checks then rejected it, so nothing unwrapped at all. Fixtures 1–11 are
 prose-dense enough that the two criteria agree.
 
-The 3-line minimum is what keeps the rule honest — a cluster of one or two is
-coincidence, not evidence of a column. It costs fixture 8, four bullets with a
-single wrapped line, its only join: no cluster there reaches three members. That
-is a conservative miss rather than corruption, and the trade buys three correct
-joins in fixture 13. A 2-line minimum keeps both but breaks idempotency on
-fixture 1, so it is out.
+**Two lines, and each candidate is tested rather than the first one taken.** A
+3-line minimum reads safer but discards the real column whenever only a couple of
+lines happened to wrap — fixture 16 has exactly two at 241–242 and every other
+bullet ends naturally, so a 3-line rule estimates nothing at all and unwraps
+nothing. Testing candidates in descending order matters for the same reason:
+picking one and giving up when it fails the exceed check loses the column
+whenever short lines form a larger cluster than the wrapped ones.
+
+Lowering the minimum to 2 also recovered joins in fixtures 8, 12 and 15 that had
+been recorded as conservative misses. It was rejected once before, because it
+broke idempotency on fixture 1 — that turned out to be a weak guard the 3-line
+minimum was masking rather than a reason to keep it (§6.2).
 
 **The maximum line length is not usable as `W`.** Sample 1's longest line is an
 unwrapped 174-character paragraph against a true column of 93. Sample 3's
@@ -432,10 +438,19 @@ Join line *N* with *N+1* when
 len(N) + 1 + len(firstWord(N+1)) > W - tolerance
 ```
 
-with **tolerance = 8**, subject to one precondition: `len(firstWord(N+1)) ≤ W`.
-If a token cannot fit on *any* line, "the next word did not fit" proves nothing —
-this is what stops sample 1's list item 1 from swallowing a 113-character file
-path. Dropping it costs a wrong join immediately, so it stays.
+with **tolerance = 8**, subject to one precondition: the next line's first token
+must be at most **100 characters**. A token that long is a path, URL or
+identifier sitting on its own line, never a word the wrapper pushed down — this
+is what stops fixture 1's list item 1 from swallowing a 113-character file path.
+Dropping it costs a wrong join immediately, so it stays.
+
+**The bound is absolute, not relative to `W`.** It was `len(firstWord) ≤ W`
+originally, which holds on a first pass and fails on a second: joining lines
+raises `W`, so the same path stops exceeding it and gets absorbed. That is an
+idempotency break the 3-line cluster minimum was accidentally hiding. The corpus
+separates cleanly — of 257 non-table lines only two open with a token over 40
+characters, and the longest legitimately joined one is 77 against the path's
+110.
 
 An earlier draft also required `len(N) ≤ W`. It was removed as redundant: every
 case it caught (sample 1's `RELATED TICKETS` entries) is already caught by
@@ -696,6 +711,8 @@ wrapping from authored prose that approximates a column.
 | 13 | Prose interleaved with indented examples and a `>` quote block | 16 | terminal | 202 | 201–202, 3 lines (1) | 3 |
 | 14 | Prose + 11-row box table with `✓`/`✗` cells and a blank header cell | 10 prose (+11 table) | terminal | 202 | 198–202, 3 lines (4) | 4 |
 | 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 202 | 199–202, 3 lines (3) | 3 |
+| 16 | Bullet summary where only two lines reached the column | 10 | terminal | 242 | 241–242, 2 lines (1) | 2 |
+| 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -751,6 +768,8 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 13 | **Highest cluster, not most populous** — the estimator was picking short-line clusters in any document with headers and examples |
 | 14 | Nothing — empty header cells, `✓`/`✗` in cells, and a row with 110 trailing spaces all pass through unchanged |
 | 15 | A table block must contain a **rule row** — a lone pipe-delimited line is ASCII art, and converting it invented header and delimiter rows |
+| 16 | Cluster minimum of 2, tested highest-first; the token cap must be absolute, not `W`-relative |
+| 17 | Dedent must ignore quote lines and table rules when computing the margin |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -808,6 +827,8 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs authored-prose drift |
+| Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first |
+| Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Max fraction exceeding `W` | 25% | above this the estimate is rejected and unwrapping is skipped (§6.1) |
 | Blank-run collapse | any run → 1 | see below |
