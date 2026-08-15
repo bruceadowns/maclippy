@@ -14,8 +14,15 @@ a **diff you can read** rather than something you have to notice by eye.
 
 ## Using them
 
-Copy an `.in.txt` to the clipboard, hit Reformat, paste, compare against the
-matching `.out.txt`:
+```sh
+make check
+```
+
+Runs `Reformat` over every fixture and prints the join count for each, or the
+first differing lines when one fails. Exits non-zero on failure.
+
+To check the real app rather than the transform, copy a fixture to the clipboard,
+hit Reformat in the menu bar, and paste:
 
 ```sh
 pbcopy < docs/fixtures/01-handoff-brief.in.txt
@@ -23,9 +30,7 @@ pbcopy < docs/fixtures/01-handoff-brief.in.txt
 pbpaste | diff - docs/fixtures/01-handoff-brief.out.txt
 ```
 
-Empty diff means it matches.
-
-**Worth doing twice.** Paste the *output* back and reformat again — it must not
+**`make check` already runs each fixture twice** — output fed back in must not
 change. Three of the four defects found while writing the spec produced
 correct-looking output on the first pass and only showed up on the second:
 dedent ordering, a collapsed wrap-width estimate, and a Markdown table that grew

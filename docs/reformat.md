@@ -555,7 +555,7 @@ the middle of a sentence — `…consults the geography fields ▎ in order and 
 | `⏺` | 2 | two spaces | yes — every sample carrying a marker |
 | `⎿` | 3 | `|_` + space | yes — sample 12 |
 | `●` | 2 | two spaces | no |
-| `✻` `✽` | 2 | two spaces | no |
+| `✻` `✽` `✶` | 2 | two spaces | `✶` seen in fixture-16 shape; the others no |
 
 **Why `⎿` becomes visible and `⏺` does not.** `⏺` marks "the assistant said
 this" — chrome that carries no meaning once the text leaves the terminal, so it
@@ -584,6 +584,7 @@ from their ASCII targets in source.
 | `→` `←` | U+2192, U+2190 | `->` `<-` |
 | `≤` `≥` | U+2264, U+2265 | `<=` `>=` |
 | `×` | U+00D7 | `x` |
+| `·` | U+00B7 | `*` |
 | `•` at line start | U+2022 | `- ` |
 | `--` between whitespace | (ASCII) | `-` |
 
@@ -767,12 +768,22 @@ the terminator set, is now caught by that guard alone.
 
 ## 9. Fixtures
 
-No test target, and none planned — this is a small app and the feedback loop is
-running it. What exists instead is [`docs/fixtures/`](fixtures/): eleven real
-pastes with hand-checked expected output. Nothing executes them; they are there
-so a behavior change is a diff you can read.
+No test target — this is a small app and the feedback loop is running it. What
+exists instead is [`docs/fixtures/`](fixtures/): fifteen real pastes with their
+expected output, and **`make check`**, a script that runs `Reformat` over all of
+them and prints what differs.
 
-`pbcopy` a `.in.txt`, reformat, `pbpaste | diff - <name>.out.txt`.
+```
+$ make check
+ok       01-handoff-brief  (11 lines joined away)
+...
+15 fixtures pass, all idempotent
+```
+
+It reports the join count per fixture, not just pass/fail. That matters: when
+quote blocks were added, a check of *which fixtures changed* passed while fixture
+11 silently went from five joins to zero. Counting joins catches that; comparing
+file lists does not.
 
 **Run it twice on anything suspicious.** Three of the four defects found while
 writing this spec produced correct-looking first-pass output and only appeared on
