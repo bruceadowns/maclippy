@@ -1,0 +1,27 @@
+Here they are side by side.
+
+A - current (gutter -> 2 spaces):
+Paste under Risks and/or areas of concern, replacing the empty-geometry bullet:
+
+  Empty geometries - two policies, not one. The port needs requireNonEmpty(true)...
+  grant access that is denied today.
+
+  Resolution: GeoPolicies.SUBSCRIPTION_REGION = LEGACY + requireNonEmpty...
+
+B - blockquote (gutter -> > ):
+Paste under Risks and/or areas of concern, replacing the empty-geometry bullet:
+
+> Empty geometries - two policies, not one. The port needs requireNonEmpty(true)...
+> grant access that is denied today.
+>
+> Resolution: GeoPolicies.SUBSCRIPTION_REGION = LEGACY + requireNonEmpty...
+
+Three things worth noticing:
+
+The bare ▎ line becomes >, which is a correct empty quote line - so the two paragraphs inside one quote stay visually joined as a single block, rather than A's version where the blank line makes them look like two unrelated indented paragraphs.
+
+B is idempotent - re-running leaves it untouched, because > is recognized on input and goes through the same strip-unwrap-reapply path.
+
+A has a real defect visible in the diff: to test the subscription path directly. is missing from A. That's a genuine bug in the current build, unrelated to quoting - the intro paragraph loses its last line. Worth chasing regardless of which option you pick.
+
+The tradeoff stands as before: B renders as an actual quote in GitLab and Jira and stays conventional as plain text, at the cost of one block kind with strip-process-reapply. A costs nothing and loses the distinction.

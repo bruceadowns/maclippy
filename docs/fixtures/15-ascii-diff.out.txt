@@ -1,0 +1,20 @@
+Yes - mandatorily, and asking cost you a real bug.
+
+The requirement
+
+Idempotency is a hard requirement on the pipeline, not on each stage. Individual stages needn't be idempotent alone; only the composition must be. Most are trivially so - flatten emits no character it also consumes, dedent leaves a common prefix of zero.
+
+Two reasons it's non-negotiable here:
+
+Nothing stops a second click. There's no UI state saying "already reformatted." A non-idempotent transform degrades the text a little more each time, and since capture dedupes by verbatim plain, it also spawns a new history clip per click instead of bumping the existing one. §3's "second Reformat is a free no-op" depends entirely on this property holding.
+
+It's the category convention. gofmt, Black and Prettier all guarantee it explicitly. It's the cheapest invariant in text transforms and catches the most.
+
+What checking it just found
+
+Your question prompted me to test the table stage, which my earlier idempotency runs had excluded. It fails:
+
+pass 1:  | today | becomes |      pass 2:  | today | becomes |
+         | --- | --- |                     | --- | --- |
+         | validateRegionEval... |           | --- | --- |     <- added
+                                           | validateRegionEval... |

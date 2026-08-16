@@ -1,0 +1,31 @@
+⏺ Done — both modules build green (geography 80 tests, udl-common 251 including 24 new), spotless:check clean, nothing committed yet.
+
+  What landed
+
+  1. HistoryUtils ported (bluestaq-udl-common) — GeographyUtils field and its 4-line surface gone; GeoEvaluator.matches + parseOrNull in its place. Public signatures unchanged, so udl and udl-aodr compile
+  untouched.
+
+  The collection dispatch is now a Map<collection, geoField>; the geoLocation branch's explicit null check turned out to be equivalent to the other branches' fall-through, so one uniform path covers all four
+  groups. Case-insensitive, which the old code was for GroundImagery/BeamContour but not for poi/sigact/weatherreport/document/acled/cidne — a no-op against the deployed topic values (groundimagery, poi,
+  beamcontour, all lowercase).
+
+  Validator is parse-only (builder().build()), not LEGACY — getRegionAsGeometry never validated, and topology-checking stored rows would silently drop self-intersecting polygons that match fine today.
+
+  2. RegionSearch.unrecognizedEval() / hasUnrecognizedEval() — byte-for-byte the check udl.FacadeGeographySupport.validateRegionParam:137-140 open-codes, so adopting it there is a pure refactor. It also has a
+  consumer now: GeoSearch.of feeds the unrecognized token straight to GeoEvaluator, which rejects it — preserving today's "typo'd operator matches nothing" rather than widening to intersects. SPEC §5.2/§5.8/§6
+  updated, plus a §7 note on why this slice of phase 3 landed early.
+
+  Behavior deltas on the live read path
+
+  - equals_ now matches instead of dropping every row. The whole point of sequencing this before AFDL-66683.
+  - Unusable stored geo field (non-String, non-Document) now drops the row — your call. Previously a swallowed ClassCastException returned the row unfiltered, i.e. results contained documents outside the
+  requested region.
+  - Search region resolved once per query, not per document — plus JTS readers are no longer shared across threads by the @ApplicationScoped bean.
+  - doCount no longer NPEs (and logs) on every filtered-out document.
+  - Not fixed here: an unparseable search region still stops filtering rather than rejecting. Pinned by a test that names AFDL-66683 as the owner.
+
+  Item 3
+
+  AodrProcessor:247 calls checkGeography(doc, collectionName, withEval, withoutEval) and both params come from the persisted job document written by udl's setSearchRegionAndEval — same pairing as the history
+  path, so all four deltas above apply identically to async jobs. The signature is unchanged, so it compiles as-is. Want me to run mvn compile in ../udl-aodr against the freshly installed 3.13-SNAPSHOT to
+  confirm? That writes to its target/, so I left it alone.

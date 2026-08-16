@@ -16,6 +16,7 @@ struct ClipMenu: View {
 
     var body: some View {
         Button("Clear Formatting") { monitor.clearFormatting() }
+        Button("Reformat") { monitor.reformat() }
         Button(monitor.isPaused ? "Resume Maclippy" : "Pause Maclippy") {
             monitor.isPaused.toggle()
         }

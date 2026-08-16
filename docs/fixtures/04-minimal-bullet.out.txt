@@ -1,0 +1,1 @@
+- Narrow behavior change: a geography field holding a non-String, non-Document value was previously kept (ClassCastException caught by the old wrapper) and is now dropped. Stored geometry that fails to parse was already dropped before this change, not kept.
