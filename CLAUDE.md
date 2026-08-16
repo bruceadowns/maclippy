@@ -59,5 +59,6 @@ User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Pr
 ## Git workflow
 
 - Default branch is **`develop`**; `main` is the release line. Both are public and kept to clean, meaningful history.
-- **`wip`** is the scratch branch for loose/experimental commits. Land finished work on `develop` as one clean commit (`git merge --squash wip`), never by pushing `wip`'s history onto `main`/`develop`.
+- **`wip`N** (`wip1`, `wip2`, …) are scratch branches for loose/experimental commits. Push them freely — the constraint is on what lands, not on what's pushed.
+- **Finished work reaches `develop` as exactly one commit.** Open a PR from the wip branch against `develop` and **squash-merge** it. The wip branch keeps its messy history for review; `develop` gets one clean commit. Don't pre-squash onto a separate topic branch, and don't let wip's individual commits land on `develop` or `main`.
 - **Do not add a `Co-Authored-By` trailer** to commits in this repo.
