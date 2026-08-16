@@ -54,6 +54,7 @@ User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Pr
 
 - **Labels** for unnamed clips come from `Clip.revealedPlain` — tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical. Shared by the menu (`ClipMenu`, further truncated to `maxItemLength` 36) and the Clips tab, so they label identically. `displayTitle` is now only the clean seed for the rename field, not a row label. A pinned clip with a `customLabel` instead shows that name (no whitespace-reveal) with a `key.fill` glyph, in both the menu and the Clips tab.
 - **Comments**: explain non-obvious *why* only; no narration comments.
+- **Every text file ends with a newline.** SwiftLint's `trailing_newline` rule covers Swift; docs, fixtures, and the Makefile are not linted, so it's on you. `Reformat` holds itself to the same rule — its output always terminates with exactly one line feed (`docs/reformat.md` §4).
 
 ## Git workflow
 
