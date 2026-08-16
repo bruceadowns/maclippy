@@ -1,7 +1,8 @@
 # Feature spec — Reformat (menu action)
 
-**Status:** specified, not implemented. Per-feature spec; extends
-[`SPEC.md`](SPEC.md), where section references (§) point unless noted.
+**Status:** implemented. Per-feature spec; extends [`SPEC.md`](SPEC.md), where
+section references (§) point unless noted. Prior art and inspiration credited in
+§2.
 
 `SPEC.md` does **not** yet carry this feature. Landing it requires edits to §1
 (the user-initiated carve-out), a new §4.9, §5 (menu row, top-block rationale,
@@ -80,6 +81,45 @@ including a plain-text one. A Markdown table is strictly better than
 That exception does not generalize. It applies to a block kind that is
 unambiguously identified by its own delimiters, converted by a total function
 with a bail-out, and never inferred from prose.
+
+### Prior art
+
+**[removeclaudewhitespace.com](https://removeclaudewhitespace.com)**
+([coeymusa/removeclaudewhitespace](https://github.com/coeymusa/removeclaudewhitespace))
+is a web tool solving the same problem — cleaning messy output copied from Claude
+Code and terminals. It was found after this design was drafted, and reading its
+`lib/clean.ts` was useful precisely because it arrived independently at the same
+shape: unify line endings, strip ANSI, normalize NBSP and ZWSP, strip gutters and
+markers, rstrip, dedent by common indent, unwrap, collapse blank runs to one,
+trim the ends. Two designs converging on that order is better evidence for the
+line-oriented architecture (§2) than either one alone.
+
+Where the two differ is instructive rather than competitive:
+
+- It **deletes** box-drawing characters; we convert them to Markdown (§5.1).
+  Deleting turns `│ a │ b │` into ` a  b `, losing the column boundaries.
+- Its box range covers the Arrows block, so `→` is dropped rather than
+  converted — the argument for our explicit flatten table over broad ranges.
+- It has **no punctuation handling at all**, which is an entire category here
+  (§7).
+- Its unwrap ships **default-off**, and its default-on `markdownMode` joins every
+  line of a blank-delimited paragraph with no wrap-column inference. Independent
+  confirmation that unwrapping is the dangerous stage.
+- It exposes eleven boolean options; this is one fixed pipeline. That is a
+  product difference more than a design one — a web page with checkboxes and a
+  live preview can afford aggressive defaults because a bad result is visible and
+  one click from fixed. A menu-bar action with no preview cannot.
+
+Nothing was taken from it directly. Reading it did surface two candidates —
+line-number gutter stripping and tab expansion in indent arithmetic — both
+currently out of scope (§12).
+
+The older lineage is worth knowing too, since it solved the prefix problem long
+ago: `par`(1), Emacs `fill-paragraph` with `adaptive-fill-mode`, and vim's
+`formatlistpat`. All of them are *told* the wrap column; inferring it (§6.1) is
+the part with thin precedent. **RFC 3676 `format=flowed`** is the standardized
+answer — the producer marks soft breaks so the consumer can unwrap losslessly —
+and its absence from terminal output is why any of this is heuristic.
 
 ## 3. Behavior (proposed SPEC §4.9)
 
