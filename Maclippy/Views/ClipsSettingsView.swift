@@ -2,6 +2,10 @@ import SwiftData
 import SwiftUI
 
 struct ClipsSettingsView: View {
+    /// Owned by `SettingsView` so its Esc handler can cancel a rename before
+    /// falling through to closing the window.
+    @Binding var editingID: UUID?
+
     @Environment(\.modelContext) private var context
 
     @Query(filter: #Predicate<Clip> { $0.pinned }, sort: \Clip.pinnedOrder, order: .forward)
@@ -9,7 +13,6 @@ struct ClipsSettingsView: View {
     @Query(filter: #Predicate<Clip> { !$0.pinned }, sort: \Clip.dateRecorded, order: .reverse)
     private var recent: [Clip]
 
-    @State private var editingID: UUID?
     @State private var draft = ""
     @State private var editingSeed = ""
     @FocusState private var fieldFocused: Bool
@@ -46,7 +49,6 @@ struct ClipsSettingsView: View {
                     .focused($fieldFocused)
                     .onAppear { fieldFocused = true }
                     .onSubmit { commit(clip) }
-                    .onKeyPress(.escape) { cancelEditing(); return .handled }
                     .onChange(of: fieldFocused) { _, focused in if !focused { commit(clip) } }
                     .onChange(of: draft) { _, new in
                         if new.count > Clip.maxLabelLength { draft = String(new.prefix(Clip.maxLabelLength)) }
@@ -75,16 +77,13 @@ struct ClipsSettingsView: View {
         }
     }
 
+    /// Abandoning an edit is just clearing `editingID` — `customLabel` is only
+    /// ever mutated on commit, so there is nothing to revert. `SettingsView`
+    /// does that directly from its Esc handler.
     private func beginEditing(_ clip: Clip) {
         draft = clip.customLabel ?? clip.displayTitle  // seed with the current label
         editingSeed = draft  // committing this unchanged is a no-op, same as Esc
         editingID = clip.id
-    }
-
-    /// Esc: abandon the edit, reverting to the stored name. `customLabel` is
-    /// only ever mutated on commit, so clearing the draft is the whole undo.
-    private func cancelEditing() {
-        editingID = nil  // guards the ensuing blur out of commit()
     }
 
     private func commit(_ clip: Clip) {
