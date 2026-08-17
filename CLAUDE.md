@@ -54,9 +54,13 @@ User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Pr
 
 - **Labels** for unnamed clips come from `Clip.revealedPlain` — tabs/newlines render as glyphs and leading/trailing spaces as `·` so verbatim-distinct clips (e.g. `"foo"` vs `" foo "`) don't look identical. Shared by the menu (`ClipMenu`, further truncated to `maxItemLength` 36) and the Clips tab, so they label identically. `displayTitle` is now only the clean seed for the rename field, not a row label. A pinned clip with a `customLabel` instead shows that name (no whitespace-reveal) with a `key.fill` glyph, in both the menu and the Clips tab.
 - **Comments**: explain non-obvious *why* only; no narration comments.
+- **Every text file ends with a newline.** SwiftLint's `trailing_newline` rule covers Swift; docs, fixtures, and the Makefile are not linted, so it's on you. `Reformat` holds itself to the same rule — its output always terminates with exactly one line feed (`docs/reformat.md` §4).
 
 ## Git workflow
 
 - Default branch is **`develop`**; `main` is the release line. Both are public and kept to clean, meaningful history.
-- **`wip`** is the scratch branch for loose/experimental commits. Land finished work on `develop` as one clean commit (`git merge --squash wip`), never by pushing `wip`'s history onto `main`/`develop`.
+- **`wip`N** (`wip1`, `wip2`, …) are scratch branches for loose/experimental commits. Push them freely — the constraint is on what lands, not on what's pushed.
+- **Work happens on the wip branch; don't create a topic branch for it.** The wip branch *is* the PR branch. Creating a second branch to hold the work adds a step, and pre-squashing onto one produces the right diff by the wrong route.
+- **Finished work reaches `develop` as exactly one commit.** Open a PR from the wip branch against `develop` and **squash-merge** it. The wip branch keeps its messy history for review; `develop` gets one clean commit. Wip's individual commits must never land on `develop` or `main`.
+- **Run `make install` after pushing.** Keeps the app in `~/Applications` matching what's on the branch, so menu-bar testing reflects the pushed state rather than whatever was built last.
 - **Do not add a `Co-Authored-By` trailer** to commits in this repo.

@@ -1,0 +1,26 @@
+⏺ Pushed. Every changed line is now covered — GeoScrubber 41/41, GeoPolicies 3/3, tempRegionSearch 16/16 — so new-code coverage should land at ~100%. 477 unit + 9 IT green.
+
+  Two things beyond the nine-operator test were needed: the fail-closed and unrecognized-eval branches in GeoScrubber had no test, and tempRegionSearch was 0/16 — the bulk of the 40% gap. I made it package-private (comment says why)
+  to test the subscription path directly.
+
+  ---
+  Ticket amendment text                                                                                                                                                                                               
+
+  Paste under Risks and/or areas of concern, replacing the empty-geometry bullet:
+
+  ▎ Empty geometries — two policies, not one. The port needs requireNonEmpty(true) for a subscription's region parameter only. Applying it to message geometries as well breaks GeoScrubber: findGeometry consults the geography fields 
+  ▎ in order and takes the first that yields a geometry, so rejecting an empty one inside the validator skips it rather than selecting it. GeoScrubberTest.searchRegion_withEmptyGeo_withLatLon demonstrates the failure — an empty 
+  ▎ atext is skipped, agjson is reached, and getAsString() throws UnsupportedOperationException on its JsonObject. Without that throw it would instead fall through to the lat/lon fallback and turn a denial into PASS_HAS_GEO, i.e. 
+  ▎ grant access that is denied today.
+  ▎
+  ▎ Resolution: GeoPolicies.SUBSCRIPTION_REGION = LEGACY + requireNonEmpty (region parameter, both in SecureMessaging.tempRegionSearch and when GeoScrubber parses it), GeoPolicies.MESSAGE_GEOMETRY = LEGACY (message geometries, 
+  ▎ reproducing getRegionAsGeometry + the caller's isValid()). Emptiness stays where it is, as the isEmpty() check in searchRegion. The acceptance criterion holds either way — the subscription is still denied on an empty geometry.
+
+  And a new bullet, since it's a deliberate behavior change not in the original scope:
+
+  ▎ Fail closed on an unusable search region. matchGeometry reads a null search region as "no spatial constraint" and returns true, so the retired code granted access on a region it could not parse. tempRegionSearch rejects such a 
+  ▎ region first, making it unreachable today, but the port makes GeoScrubber deny rather than pass — an access decision that cannot be evaluated should not succeed.
+
+  Optionally, under Amplifying Detail(s) — the wololo removal isn't mentioned in the ticket and touches the dependency graph:
+
+  ▎ org.wololo:jts2geojson is dropped from secure-messaging; GeographyUtils was its only consumer in the module, and the leaf reads GeoJSON with JTS GeoJsonReader. Watch for parser edge-case differences between the two.

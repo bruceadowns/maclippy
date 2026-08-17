@@ -1,0 +1,48 @@
+⏺ Worth knowing: my memory is scoped to the udl project path, so a session started in component-library won't load any of this. Here's a paste-able brief for the new session.
+
+  Working AFDL-66686 in component-library. Context from the AFDL-62351 session:
+
+  SCOPE
+  1. Port HistoryUtils.checkGeography / noGeoMatch to bluestaq-geography.
+     bluestaq-udl-common-parent/bluestaq-udl-common/src/main/java/com/bluestaq/udl/common/history/HistoryUtils.java
+     - GeographyUtils surface is 4 lines: field :83, calls :388-390.
+     - noGeoMatch :386-394, checkGeography :396-432.
+     - Replace with GeoEvaluator.matches + GeometryValidator.parseOrNull.
+     - Keep the public signature so udl and udl-aodr compile unchanged.
+  2. Add an unrecognized-eval-prefix accessor to RegionSearch (bluestaq-geography).
+     Additive, no consumers yet. Its UDL payoff waits on udl!5228 merging.
+  3. Verify udl-aodr AodrProcessor:247 filtering after the version bump (no code change there).
+
+  CALLERS
+  HistoryUtils.writeHistoryContent:257 (via streamHist) and doCount:368, both same file.
+  udl-aodr src/main/java/com/bluestaq/udl/aodr/processor/job/AodrProcessor.java:247.
+
+  WHY THIS MUST LAND BEFORE THE UDL HISTORY PORT (AFDL-66683)
+  GeographyUtils.matchGeometry:208 re-validates the operator against its own 8-operator
+  evalSet (:80-87). GeoConstants.EVAL_SET has 9, including EQUALS_OP="equals". Port UDL's
+  validation first and equals_ passes the front door, then every row fails the match --
+  a silent 200 [] where the endpoint currently returns 400.
+
+  DEFECTS TO FIX IN THE SAME PASS
+  - checkGeography wraps its whole body in catch(Exception){log.error} and returns the doc
+    UNCHANGED, so an undecodable stored geometry KEEPS the row. parseOrNull drops it.
+    This changes live history results incl. async AODR jobs -- decide ship-or-gate first.
+  - noGeoMatch re-parses the SEARCH region for every document in the cursor loop, and
+    re-derives the eval with substringBefore per call.
+  - checkGeography dispatches by collection name in a hardcoded if/else:
+    GroundImagery->regionText, areaTypes(poi/sigact/weatherreport)->atext,
+    BeamContour->geographyText, GeoLocationCollections(document/acled/cidne)->geoLocation.
+
+  VERIFIED FACTS (don't re-derive)
+  - bluestaq-geography depends on no bluestaq-* artifact, so udl-common taking a dependency
+    on it introduces no cycle. Published as 3.12-SNAPSHOT via component-library-bom.
+  - No test file in bluestaq-udl-common covers GeographyUtils at all.
+  - equals starting to work on history closes a divergence opened by udl!5228, where the
+    11 ported REST facades moved to the 9-operator set and /history did not.
+  - CL merge auto-triggers downstream pipelines; sequence the version bump.
+
+  RELATED TICKETS
+  AFDL-66683 (udl AbstractHistoryFacade validation + GeographyUtils read-path deletion) - blocked on this.
+  AFDL-66690 (secure-messaging port) - fully independent, can run in parallel.
+  AFDL-66691 (write path) - needs 66683.
+  AFDL-66180 -- resolves after 66683.

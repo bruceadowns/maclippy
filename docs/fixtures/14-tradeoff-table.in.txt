@@ -1,0 +1,28 @@
+⏺ Sample 13 now unwraps correctly — 20 lines to 17, all three paragraphs joined, still idempotent. Sample 12 is unchanged (it genuinely lacks the evidence).
+
+  Here's the trade, and it's yours to call because it isn't free:
+
+  The estimator has a real flaw. It picks the cluster with the most lines, but short lines — headers, labels, paragraph tails — naturally outnumber wrapped ones in any structured document. Sample 13's
+  true column is the 201–202 cluster (3 lines); the rule picked 29–46 (6 lines) and then correctly rejected it as nonsense. Samples 1–11 were prose-dense enough to mask this.
+
+  The fix: pick the highest cluster with at least 3 members, not the biggest. A greedy wrapper puts lines at the column and never above it, so the wrap column belongs at the top of the distribution, not
+  the middle.
+
+  ┌────────────┬───────────┬───────────────────────────────────────────┐
+  │            │    now    │                 with fix                  │
+  ├────────────┼───────────┼───────────────────────────────────────────┤
+  │ sample 13  │ 0 joins   │ 3 joins ✓                                 │
+  ├────────────┼───────────┼───────────────────────────────────────────┤
+  │ sample 12  │ 0 joins   │ 0 joins (genuinely insufficient evidence) │
+  ├────────────┼───────────┼───────────────────────────────────────────┤
+  │ fixture 08 │ 1 join    │ 0 joins ✗                                 │
+  ├────────────┼───────────┼───────────────────────────────────────────┤
+  │ all others │ unchanged │ unchanged                                 │                                                                                                                  
+  └────────────┴───────────┴───────────────────────────────────────────┘
+
+  Cost: fixture 08 — four bullets with exactly one wrapped line — loses its only join, because no cluster reaches 3 members. That's a conservative miss, not corruption.
+
+  I tried ≥2 to keep both; it breaks idempotency on fixture 01, so it's out.
+
+  My read: take it. Sample 13's shape — prose interleaved with examples, headers and short paragraphs — is far more typical of what you actually paste than sample 8's four-bullet fragment, and three
+  correct joins beats one. But it's a visible regression on an existing fixture, so I'd rather you decide than quietly swap it.

@@ -1,0 +1,19 @@
+/history/count accepts a region search, validates it, and then returns a count that never applies it - unless the caller happens to take the access-control cursor path. The same query string against /history filters correctly, so the two endpoints disagree on how many records match.
+
+Amplifying Detail(s):
+AbstractHistoryFacade.countHistory counts in Mongo first (:718 mongoHelper.countAll) and only walks a cursor when hasConditionals && (!conditionalAccessForJava) (:730) and fullCount <= COUNT_MAX_LIMIT (:733). The per-document region filter lives on the cursor path - HistoryUtils.doCount applies checkGeography - so every other caller falls through to totalCount + fullCount.intValue() (:768), a raw Mongo count. A region search cannot narrow that count, because it is a Java-side geometry comparison and never becomes part of the BasicDBObject the count runs against: filterQueryParams strips the region before buildCondition ever sees the parameters. Reproducible against POIIT: two seeded POI history documents, one inside the queried polygon, /history returns one and /history/count returns two. That test currently asserts 2 with a javadoc explaining why, so whoever fixes this has to flip it (POIIT.givenSeededHistory_whenCountHistoryWithRegion_thenRegionIsNotApplied). Preferred fix is to take the cursor path whenever a region is present, independent of conditional access, under the existing COUNT_MAX_LIMIT guard. Pushing the geometry into the Mongo query instead is not generally available - most collections store WKT strings rather than GeoJSON with a geospatial index - and rejecting the parameter on count would break the parity AFDL-66683 just established.
+
+Risks and/or areas of concern:
+User-visible on every history count that carries a region: today's inflated numbers become correct, smaller ones. Result sets above COUNT_MAX_LIMIT would start answering 416 where they currently return a wrong count, which is the more disruptive half of the change. Which branch runs today also depends on the conditionalAccessForJava toggle and on the caller's conditional access, so behavior differs per environment and per user - worth confirming against a deployed environment rather than only locally. Adds a full cursor scan to region counts that are cheap Mongo counts today.
+
+Acceptance Criteria:
+- /history/count and /history report the same number of matching records for the same query string carrying a region.
+- A count carrying a region is correct for a caller with no conditional access.
+- A count carrying no region still answers from the Mongo count, with no cursor scan.
+- POIIT.givenSeededHistory_whenCountHistoryWithRegion_thenRegionIsNotApplied is replaced by an assertion that the region is applied.
+
+Dependencies:
+AFDL-66683 lands first - it supplies the seeded-history integration coverage this is measured against.
+
+---
+One caveat on AC #1: it holds only for collections the matcher can filter at all. On the five collections in the LaunchIndicator parity ticket both endpoints return everything, so they agree today for the wrong reason and will keep agreeing after either fix.

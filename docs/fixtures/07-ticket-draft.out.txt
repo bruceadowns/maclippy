@@ -1,0 +1,21 @@
+Body:
+Five HasGeography entities expose /history endpoints that accept a region parameter, validate it, and then return every document unfiltered, because their collection is absent from the matcher's geometry-field map. Their non-history endpoints filter correctly, so the same query string means different things on /udl/<x> and /udl/<x>/history.
+
+Amplifying Detail(s):
+AbstractHistoryFacade validates a region by parameter name (:575 queryHistory, :689 countHistory, :945 queryHistoryAodr), so validation fires for every history facade. Application is keyed on collection name instead: HistoryUtils.checkGeography reads GEO_FIELD_BY_COLLECTION.get(collectionName) and returns the document untouched when that lookup is null. The map covers GroundImagery, POI, SigAct, WeatherReport, BeamContour, document, acled, cidne (case-insensitive), while the collection name is the lowercased Kafka topic. The unmapped pairs are analyticimagery, eventevolution, featureassessment, launchindicator and sarobservation - all five HasGeography, all five with three history endpoints each. beamcontour is the mirror-image dead entry: mapped, but BeamContourFacadeREST extends AbstractFacade and has no history endpoints at all. Pre-existing: the pre-AFDL-66686 dispatch (GeoLocationCollections plus the POI/SigAct/WeatherReport areaTypes list, with GroundImagery and BeamContour matched by name) omitted the same five. Two candidate fixes - add the five to the map with each entity's stored geometry field, or reject the region parameter on history endpoints whose collection cannot filter. The first closes the parity gap; the second makes the gap explicit instead. Adding them changes result sets for anyone already sending a region to these endpoints and getting everything back.
+
+Risks and/or areas of concern:
+Component-library change, so it auto-triggers downstream pipelines and needs its own release before UDL sees it. Whichever fix is chosen is user-visible on 15 endpoints: option one silently narrows result sets for callers currently receiving unfiltered data, option two turns their 200 into a 400. Each of the five needs its stored Mongo geometry field confirmed individually - atext, regionText and geographyText are all in use across the mapped collections, and guessing wrong filters on a field that is always null, which drops every document rather than none. No IT covers a region parameter against any of these ten history endpoints today.
+
+Acceptance Criteria:
+- A region parameter on /history and /history/count filters identically to the same parameter on the collection's non-history endpoint, for all five collections.
+- equals_ on /udl/launchindicator/history matches the same records as equals_ on /udl/launchindicator.
+- No history endpoint accepts a region parameter it cannot apply.
+- GEO_FIELD_BY_COLLECTION contains no entry unreachable from any endpoint.
+- Integration coverage asserts filtering, not just a 200, on each of the five collections.
+
+Dependencies:
+AFDL-66686 and AFDL-66683 both land first - this builds on the map they introduce and the validation they consolidate.
+
+---
+Two notes before you file it. BeamContour's dead map entry is arguably its own small ticket, but it's the same map and the same investigation, so I'd keep it here. And AC #2 is the one that pins the fix to real behavior - it's the exact case the AFDL-66683 test matrix can't assert, so if you'd rather this ticket stay narrow, that's the AC to keep.

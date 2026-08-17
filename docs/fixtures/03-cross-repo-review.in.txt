@@ -1,0 +1,47 @@
+⏺ Read ../udl on AFDL-62351-port-launchindicator-geography. Nothing here is blocking — udl is already on 3.13-SNAPSHOT, already declares bluestaq-geography, and calls nothing I deleted. The CL merge flows in with
+  zero udl edits. What follows is what should change, in priority order.
+
+  1. The real coupling: /history is the last thing on 8 operators
+
+  AbstractHistoryFacade has the same region block copy-pasted three times — queryHistory (~549), countHistory (~688), the AODR path (~913) — and each validates with geographyUtils.validateRegionEval, the
+  8-operator set. So right now equals_POLYGON(...) is a 400 on /history and a 200-with-results on the 13 facades you ported. The matcher under it just moved to 9. Closing that is AFDL-66683, and each block needs
+  four swaps:
+
+  ┌──────────────────────────────────────────────┬─────────────────────────────────────────────────────────┐
+  │                    today                     │                         becomes                         │
+  ├──────────────────────────────────────────────┼─────────────────────────────────────────────────────────┤
+  │ validateRegionEval(substringBefore(raw,"_")) │ the 9-operator path                                     │
+  ├──────────────────────────────────────────────┼─────────────────────────────────────────────────────────┤
+  │ raw.contains("_") + substringBefore          │ RegionSearch.hasUnrecognizedEval() / unrecognizedEval() │
+  ├──────────────────────────────────────────────┼─────────────────────────────────────────────────────────┤
+  │ raw.substring(raw.lastIndexOf("_") + 1)      │ RegionSearch.geometryText()                             │
+  ├──────────────────────────────────────────────┼─────────────────────────────────────────────────────────┤
+  │ geographyUtils.validateRegion(...)           │ GeometryValidator under RESTRICTIVE                     │
+  └──────────────────────────────────────────────┴─────────────────────────────────────────────────────────┘
+
+  Best shape is a history-flavored validateRegionParam on FacadeGeographySupport that reads the parsed requestMap instead of UriInfo — then all three blocks collapse to one call and there's one implementation,
+  not four.
+
+  2. Retire the open-coded check in FacadeGeographySupport:137-140
+
+  Straight swap to unrecognizedEval(). I matched indexOf (not sep > 0) and the empty-token case on purpose, so the thrown message is byte-identical — pure refactor, rides along with #1.
+
+  3. The AODR job document is a cross-repo contract
+
+  TEMP_REGION_SEARCH_WITHOUT_EVAL (written at AbstractHistoryFacade:1183) is what HistoryUtils.checkGeography consumes as the geometry in udl-aodr. Changing the split in #1 changes the value written, so: jobs
+  persisted before the deploy get read after it, and udl + udl-aodr want to ship close together. The two splits agree on everything except geometries containing underscores.
+
+  4. Deltas for the 66683 MR description / ACs
+
+  - equals_<geometry> on /history: 400 → filtered results.
+  - _<geometry>: error message gains an empty operator name.
+  - RESTRICTIVE at the front door newly rejects out-of-bounds coordinates and empty geometries on history params — the same tightening the ported facades already absorbed (SPEC §7). Worth log-watching.
+  - From the CL side, no udl code: rows whose stored geo field is the wrong BSON type now drop instead of surviving the filter.
+
+  5. Explicitly deferred
+
+  The (withEval, withoutEval) string pair is now derived twice — once at the facade, once in GeoSearch.of. Collapsing it to an eval+geometry pair kills the duplication but changes published API and the persisted
+  AODR document, so it belongs with AFDL-66691. And AbstractFacade.geographyUtils stays for the unported callers — SigActFacadeREST, ImageryUtility, XDomainIngester — so read-path deletion remains gated behind
+  AFDL-66180.
+
+  Test gap worth noting: f4b29efd2 pins equals_ on the ported REST endpoints only. All three history entry points need their own coverage for equals_, an unrecognized prefix, and an underscore-bearing geometry.

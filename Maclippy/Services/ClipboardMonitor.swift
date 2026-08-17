@@ -136,6 +136,22 @@ final class ClipboardMonitor {
         lastChangeCount = pasteboard.changeCount  // our own write; don't recapture
     }
 
+    /// Rewrites the current pasteboard through `Reformat` (see
+    /// `docs/reformat.md`). Acts on the live pasteboard, not stored history.
+    ///
+    /// Unlike `clearFormatting()` this deliberately does *not* suppress
+    /// self-capture: the rewritten text becomes a new clip, leaving the original
+    /// one row below it in Recent. That is the undo story, and it is what makes
+    /// an aggressive transform acceptable as a single click.
+    func reformat() {
+        let pasteboard = NSPasteboard.general
+        guard let plain = pasteboard.string(forType: .string) else { return }
+        let cleaned = Reformat.apply(plain)
+        guard cleaned != plain else { return }  // no-op: don't churn history
+        pasteboard.clearContents()
+        pasteboard.setString(cleaned, forType: .string)
+    }
+
     // MARK: - History
 
     /// Refetches the menu snapshots. Filters/sorts mirror the Settings `@Query`s.

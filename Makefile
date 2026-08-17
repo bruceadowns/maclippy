@@ -9,7 +9,7 @@ APP          := $(DERIVED_DATA)/Build/Products/$(CONFIG)/Maclippy.app
 RELEASE_APP  := $(DERIVED_DATA)/Build/Products/Release/Maclippy.app
 INSTALL_DIR  := $(HOME)/Applications
 
-.PHONY: help build release run lint install clean open inc-ver
+.PHONY: help build check release run lint install clean open inc-ver
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | \
@@ -18,6 +18,13 @@ help: ## Show this help
 build: ## Build (Debug, ad-hoc signed)
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIG) \
 		-derivedDataPath $(DERIVED_DATA) -destination 'platform=macOS' build
+
+check: ## Run Reformat over docs/fixtures and report diffs
+	@swiftc -O -parse-as-library -o $(DERIVED_DATA)/reformat-check \
+		Maclippy/Support/Reformat.swift \
+		Maclippy/Support/Reformat+Predicates.swift \
+		Tools/reformat-check.swift
+	@$(DERIVED_DATA)/reformat-check
 
 release: CONFIG := Release
 release: build ## Build (Release, ad-hoc signed)
