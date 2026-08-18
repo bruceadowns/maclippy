@@ -769,7 +769,8 @@ sample are `§` (5 occurrences, samples 2 and 3) and the 📝 / ✨ emoji in sam
 
 ## 8. Calibration corpus
 
-Eighteen real pastes, measured at stage 5 — markers substituted, tables masked,
+Every fixture in [`docs/fixtures/`](fixtures/) is a real paste, and every one is
+in the table below, measured at stage 5 — markers substituted, tables masked,
 **not yet dedented** (dedent is stage 7). "Regime" distinguishes true terminal
 wrapping from authored prose that approximates a column.
 
@@ -812,7 +813,7 @@ fixture pin down before someone reads it as a bug.
 
 ### Is this over-fitted?
 
-A fair question with eighteen fixtures and roughly a dozen rules. The check is
+A fair question — the corpus is not much larger than the rule set. The check is
 **ablation**: delete each rule, re-run the whole corpus, and see whether anything
 changes. Re-run after fixture 15, every rule but one alters at least one
 fixture's output, breaks idempotency, or lets code through — the table above
@@ -876,7 +877,7 @@ the terminator set, is now caught by that guard alone.
 ## 9. Fixtures
 
 No test target — this is a small app and the feedback loop is running it. What
-exists instead is [`docs/fixtures/`](fixtures/): eighteen real pastes with their
+exists instead is [`docs/fixtures/`](fixtures/): real pastes with their
 expected output, and **`make check`**, a script that runs `Reformat` over all of
 them and prints what differs.
 
@@ -884,7 +885,7 @@ them and prints what differs.
 $ make check
 ok       01-handoff-brief  (11 lines joined away)
 ...
-18 fixtures pass, all idempotent
+<n> fixtures pass, all idempotent
 ```
 
 It reports the join count per fixture, not just pass/fail. That matters: when
@@ -902,7 +903,7 @@ The invariants worth checking by hand, should something look wrong:
 
 | Property | Note |
 |---|---|
-| `apply(apply(x)) == apply(x)` | the one above; holds on all eighteen fixtures |
+| `apply(apply(x)) == apply(x)` | the one above; holds on every fixture |
 | Word multiset preserved | assert **after** stage 3 — markers are intentionally consumed |
 | Line count never increases | |
 | A converted `table` has uniform column count, or is byte-identical | §5.1; ragged input must bail out, never half-convert |
