@@ -1,0 +1,6 @@
+  Draft reply:
+
+  ▎ You're right on private — that rule is about injection points, not ctor-assigned fields, so my objection there doesn't apply. The no-args ctor is still needed though,
+  ▎ for the reason your quote gives: AbstractFacade (and the History/GeoImagery subclasses) declare only (Class<T>), so ArC can't synthesize one — meaning two ctors per 
+  ▎ facade and a non-final field. The clean version is a no-args ctor on the abstract facades so ArC generates the rest; taking that as a follow-up rather than growing 
+  ▎ this MR.

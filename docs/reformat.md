@@ -294,15 +294,23 @@ separates every row with `├──┼──┤`, which is unambiguous.
 ### 5.2 Quote blocks
 
 A line opening with `▎`, `┃`, `❯` or `>` is a quote line. The gutter is normalized
-to `> ` and **the content is not unwrapped** — quote lines are excluded from the
-words-per-line measurement and from every join.
+to `> ` and **the content is not unwrapped** — quote lines are excluded from
+every join.
 
-They are **not** excluded from width estimation, and the distinction matters. A
-quote line was wrapped by the same terminal at the same column as the prose
-around it, so it is first-rate evidence of `W` even though we decline to unwrap
-it. An earlier draft excluded them from measurement too, which cost fixture 11
-all five of its joins: strip the quote lines out of a quote-heavy paste and no
-cluster reaches three members, so no column can be established at all.
+They are **not** excluded from either measurement, and the distinction matters: a
+quote line is still prose, wrapped by the same terminal at the same column as
+everything around it.
+
+- **Width estimation.** Excluding them cost fixture 11 all five of its joins —
+  strip the quote lines out of a quote-heavy paste and no cluster survives, so no
+  column can be established at all.
+- **The code guardrail (§6.1).** Excluding them made fixture 19 read as code. It
+  is a `Draft reply:` label above four quoted lines, so the only measurable line
+  was two words long; the guardrail called the paste code and returned it
+  verbatim, gutters and em dashes intact.
+
+Both were the same mistake made twice: treating *not unwrapped* as *not
+evidence*. A quote is exempt from being **joined**, not from being **counted**.
 
 `▎` is the CLI's rendering of a Markdown blockquote, so emitting `> ` restores
 the source markup rather than inventing it — the same argument §5.1 makes for
@@ -794,6 +802,7 @@ wrapping from authored prose that approximates a column.
 | 16 | Bullet summary where only two lines reached the column | 10 | terminal | 242 | 241–242, 2 lines (1) | 2 |
 | 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
 | 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
+| 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | — | — | 0 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -859,6 +868,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 16 | Cluster minimum of 2, tested highest-first; the token cap must be absolute, not `W`-relative |
 | 17 | Dedent must ignore quote lines and table rules when computing the margin |
 | 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
+| 19 | Quote lines must count toward the code guardrail, not just the width estimate |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8

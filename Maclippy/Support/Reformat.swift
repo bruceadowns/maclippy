@@ -68,7 +68,10 @@ enum Reformat {
         lines = lines.map { String($0.reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }  // 4
 
         // Code guardrail: the whole pipeline is a no-op, not just unwrapping.
-        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) && !isQuote($0) }
+        // Quote lines count here even though they are never joined. Their content
+        // is prose, and it is evidence the document is prose — excluding them made
+        // a mostly-quoted paste look like code and skipped the pipeline entirely.
+        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }
         let wordsPerLine = measurable.isEmpty ? 0
             : Double(measurable.reduce(0) { $0 + $1.split(separator: " ").count }) / Double(measurable.count)
         guard wordsPerLine >= minWordsPerLine else { return input }  // verbatim
