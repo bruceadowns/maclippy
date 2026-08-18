@@ -59,8 +59,8 @@ User-facing settings persist via `@AppStorage` (UserDefaults), registered in `Pr
 ## Git workflow
 
 - Default branch is **`develop`**; `main` is the release line. Both are public and kept to clean, meaningful history.
-- **`wip`N** (`wip1`, `wip2`, …) are scratch branches for loose/experimental commits. Push them freely — the constraint is on what lands, not on what's pushed.
-- **Work happens on the wip branch; don't create a topic branch for it.** The wip branch *is* the PR branch. Creating a second branch to hold the work adds a step, and pre-squashing onto one produces the right diff by the wrong route.
-- **Finished work reaches `develop` as exactly one commit.** Open a PR from the wip branch against `develop` and **squash-merge** it. The wip branch keeps its messy history for review; `develop` gets one clean commit. Wip's individual commits must never land on `develop` or `main`.
+- **Topic branches are named for the work they carry** — `reformat-fixtures`, not `wip1`. One branch per unit of work, scoped tightly enough that the name says what is on it. Push freely and commit loosely onto it — the constraint is on what lands, not on what's pushed. (`wip`N scratch branches were the earlier convention; retired in favor of specific names.)
+- **That branch *is* the PR branch.** Don't create a second branch to hold the work: it adds a step, and pre-squashing onto one produces the right diff by the wrong route.
+- **Finished work reaches `develop` as exactly one commit.** Open a PR against `develop` and **squash-merge** it. The topic branch keeps its messy history for review; `develop` gets one clean commit. A branch's individual commits must never land on `develop` or `main`.
 - **Run `make install` after pushing.** Keeps the app in `~/Applications` matching what's on the branch, so menu-bar testing reflects the pushed state rather than whatever was built last.
 - **Do not add a `Co-Authored-By` trailer** to commits in this repo.
