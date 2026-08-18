@@ -155,7 +155,12 @@ private extension Reformat {
             return rest.isEmpty ? pad + ">" : pad + "> " + rest
         }
         if let replacement = markers[first] {
-            return pad + replacement + body.dropFirst().drop { $0 == " " }
+            // Recurse, because a response marker is chrome and what follows it may
+            // be a real gutter: `⏺ ▎ quoted` leaves the `▎` behind otherwise, which
+            // a second pass then converts — an idempotency break (fixture 18).
+            // Quote gutters deliberately do not recurse: `> > x` is a nested
+            // blockquote, and collapsing it would drop a level.
+            return pad + replacement + substituteGutter(String(body.dropFirst().drop { $0 == " " }))
         }
         return line
     }

@@ -156,7 +156,7 @@ once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
 |---|---|---|
 | 1 | Strip ANSI/OSC escapes, zero-width characters | `\u{1B}[…m`, `\u{200B}` |
 | 2 | Normalize line endings, NBSP → space | CRLF/CR → LF |
-| 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> ` (§5.2) |
+| 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> `, and recurses after a marker so `⏺ ▎` yields both (§5.2) |
 | 4 | Strip trailing whitespace from every line | |
 | 5 | Estimate wrap width | §6.1; tables excluded |
 | 6 | Unwrap forced breaks | §6.2 |
@@ -213,7 +213,7 @@ single forward scan). The unwrapper consults them at each candidate join.
 | Predicate | True when | Effect on a join |
 |---|---|---|
 | `isTable` | trimmed line starts with `│┌├└┬┴┼─╭╰┏┗┣` or `\|` **and** ends with the mirror set | never joins, either side (§5.1) |
-| `isQuote` | line opens with `▎`, `┃` or `>` | never joins, either side (§5.2) |
+| `isQuote` | line opens with `▎`, `┃`, `❯` or `>` | never joins, either side (§5.2) |
 | `isHeader` | ALL-CAPS after stripping a trailing parenthetical, **and** not ending in `.?!` | never joins, either side |
 | `isListStart` | line begins `- `, `* `, `+ `, `N. `, `N) ` | never joined *into* |
 | `inList` | line is a list item, or follows one without an intervening blank | relaxes `terminalPunctuation` (§6.3) |
@@ -293,8 +293,8 @@ separates every row with `├──┼──┤`, which is unambiguous.
 
 ### 5.2 Quote blocks
 
-A line opening with `▎`, `┃` or `>` is a quote line. The gutter is normalized to
-`> ` and **the content is not unwrapped** — quote lines are excluded from the
+A line opening with `▎`, `┃`, `❯` or `>` is a quote line. The gutter is normalized
+to `> ` and **the content is not unwrapped** — quote lines are excluded from the
 words-per-line measurement and from every join.
 
 They are **not** excluded from width estimation, and the distinction matters. A
@@ -308,6 +308,23 @@ cluster reaches three members, so no column can be established at all.
 the source markup rather than inventing it — the same argument §5.1 makes for
 tables. Recognizing `>` on input as well as output is what keeps the stage
 idempotent, and it handles email-style quoting for free.
+
+**`❯` is the exception to that argument.** It is a shell prompt, not a rendered
+blockquote, so mapping it to `> ` genuinely does invent markup. It earns its place
+structurally instead: a prompt is a discrete utterance that must never merge into
+the prose around it, and quote lines are the only kind the unwrapper refuses to
+touch. Emitting the prompt as a quote is also the right shape for the
+destination — a pasted transcript reads as alternating speech.
+
+**A marker and a gutter can open the same line**, and the substitution has to
+consume both. `⏺ ▎ text` is one line of quoted assistant output: replacing only
+the leading `⏺` leaves the `▎` sitting in the text, where it fails the §9
+no-marker-survives invariant, keeps the line out of `isQuote` while its
+continuations are in, and — because a second pass sees the `▎` at the front and
+converts it — **breaks idempotency**. So a *marker* replacement recurses on what
+follows it. A *quote gutter* does not: `> > x` is a nested blockquote, and
+recursing would silently drop a level. Fixture 18 is the case; it changes no other
+fixture.
 
 **Not unwrapping is what makes this cheap.** An earlier design substituted the
 gutter and let the unwrapper run, which welded the marker into the middle of
@@ -632,7 +649,7 @@ the middle of a sentence — `…consults the geography fields ▎ in order and 
 | `⏺` | 2 | two spaces | yes — every sample carrying a marker |
 | `⎿` | 3 | `|_` + space | yes — sample 12 |
 | `●` | 2 | two spaces | no |
-| `✻` `✽` `✶` | 2 | two spaces | `✶` seen in fixture-16 shape; the others no |
+| `✻` `✽` `✶` | 2 | two spaces | `✻` — fixture 18; `✶` seen in fixture-16 shape; `✽` no |
 
 **Why `⎿` becomes visible and `⏺` does not.** `⏺` marks "the assistant said
 this" — chrome that carries no meaning once the text leaves the terminal, so it
@@ -752,7 +769,7 @@ sample are `§` (5 occurrences, samples 2 and 3) and the 📝 / ✨ emoji in sam
 
 ## 8. Calibration corpus
 
-Fifteen real pastes, measured at stage 5 — markers substituted, tables masked,
+Eighteen real pastes, measured at stage 5 — markers substituted, tables masked,
 **not yet dedented** (dedent is stage 7). "Regime" distinguishes true terminal
 wrapping from authored prose that approximates a column.
 
@@ -775,6 +792,7 @@ wrapping from authored prose that approximates a column.
 | 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 202 | 199–202, 3 lines (3) | 3 |
 | 16 | Bullet summary where only two lines reached the column | 10 | terminal | 242 | 241–242, 2 lines (1) | 2 |
 | 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
+| 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -785,9 +803,16 @@ only proved.
 fixture 8 (no cluster reaches 3 lines) and fixture 12 (tool output dominates the
 length distribution, so no column can be established).
 
+**Fixture 18's zero joins are not a miss.** Its width estimate is correct and
+every long line is a quote line, which §5.2 declines to unwrap; the four
+non-quote lines are short and blank-separated, so there is nothing left to join.
+A paste whose substance sits entirely inside a `▎` block reformats to a `>` block
+and otherwise stands still — which is the specified behavior, and worth having a
+fixture pin down before someone reads it as a bug.
+
 ### Is this over-fitted?
 
-A fair question with fifteen fixtures and roughly a dozen rules. The check is
+A fair question with eighteen fixtures and roughly a dozen rules. The check is
 **ablation**: delete each rule, re-run the whole corpus, and see whether anything
 changes. Re-run after fixture 15, every rule but one alters at least one
 fixture's output, breaks idempotency, or lets code through — the table above
@@ -832,6 +857,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 15 | A table block must contain a **rule row** — a lone pipe-delimited line is ASCII art, and converting it invented header and delimiter rows |
 | 16 | Cluster minimum of 2, tested highest-first; the token cap must be absolute, not `W`-relative |
 | 17 | Dedent must ignore quote lines and table rules when computing the margin |
+| 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -850,7 +876,7 @@ the terminator set, is now caught by that guard alone.
 ## 9. Fixtures
 
 No test target — this is a small app and the feedback loop is running it. What
-exists instead is [`docs/fixtures/`](fixtures/): fifteen real pastes with their
+exists instead is [`docs/fixtures/`](fixtures/): eighteen real pastes with their
 expected output, and **`make check`**, a script that runs `Reformat` over all of
 them and prints what differs.
 
@@ -858,7 +884,7 @@ them and prints what differs.
 $ make check
 ok       01-handoff-brief  (11 lines joined away)
 ...
-15 fixtures pass, all idempotent
+18 fixtures pass, all idempotent
 ```
 
 It reports the join count per fixture, not just pass/fail. That matters: when
@@ -876,7 +902,7 @@ The invariants worth checking by hand, should something look wrong:
 
 | Property | Note |
 |---|---|
-| `apply(apply(x)) == apply(x)` | the one above; holds on all eleven fixtures |
+| `apply(apply(x)) == apply(x)` | the one above; holds on all eighteen fixtures |
 | Word multiset preserved | assert **after** stage 3 — markers are intentionally consumed |
 | Line count never increases | |
 | A converted `table` has uniform column count, or is byte-identical | §5.1; ragged input must bail out, never half-convert |
