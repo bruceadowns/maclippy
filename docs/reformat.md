@@ -156,6 +156,7 @@ once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
 |---|---|---|
 | 1 | Strip ANSI/OSC escapes, zero-width characters | `\u{1B}[…m`, `\u{200B}` |
 | 2 | Normalize line endings, NBSP → space | CRLF/CR → LF |
+| 2b | Close a run of ≥ `minPadRun` interior spaces to one space | terminal row padding standing in for a wrap; tables exempt |
 | 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> `, and recurses after a marker so `⏺ ▎` yields both (§5.2) |
 | 4 | Strip trailing whitespace from every line | |
 | 5 | Estimate wrap width | §6.1; tables excluded |
@@ -176,6 +177,9 @@ interchangeable when it is not:
   (`⏺`) or ASCII (`⎿` → `|_`). Every sample in §8 depends on this.
 - **Stage 3 must precede 5.** Width estimation measures text, not gutters, and
   must not measure table rows.
+- **Stage 2b must precede 5.** A padded line is an outlier — 356 characters where
+  the column is 171 (fixture 21) — and two of them are enough to form a cluster
+  at the top of the distribution and be taken for the wrap column.
 - **Stage 4 must precede 6.** Width estimation and the forced-break arithmetic
   both measure line length, and trailing spaces would inflate it.
 
@@ -508,6 +512,36 @@ they are all wrapper output. Centring `W` in the band rejects the upper half of
 its own cluster and needs a slack constant to claw them back. The maximum needs
 none.
 
+### 6.1.1 When the wrap arrives as padding
+
+A terminal pads a row out to its own width. Usually that padding is trailing, and
+stage 4 drops it — fixtures 11 and 18 each carry a line padded with 191 and 148
+spaces and neither needed a rule. Fixture 21 is the same artifact with the next
+row's first word appended to the same buffer line:
+
+```
+Lead with the lease benefits — … benefits are cheap: you're[183 spaces]not
+```
+
+170 characters of text, the padding, then `not`. **Content after the padding is
+what says the row continued**; padding at the end of a line says it ended. So the
+run is a line break written as spaces, and closing it to the single space a wrap
+join uses is the whole rule.
+
+It is *not* routed through §6.2 by splitting the line at the run. That reads well
+— hand the break to the rule that already decides breaks — but `forcedBreaks`
+measures pre-join lengths, so the 3-character tail `not` looks like a line no
+wrapper was ever forced to break. The join stops there on pass 1 and happens on
+pass 2, which is an idempotency violation.
+
+Table rows are exempt: cells pad to align, and fixtures 3, 10 and 14 lose their
+tables without the exemption.
+
+The threshold is absolute (32) rather than a fraction of `W`, for the same reason
+as `maxAbsorbableToken`: `W` grows once lines are joined, so a `W`-relative bound
+stops holding on a second pass. The corpus separates cleanly — real column
+gutters reach 26 (fixture 20), artifacts start at 148.
+
 ### 6.2 The forced-break test
 
 Join line *N* with *N+1* when
@@ -817,6 +851,7 @@ wrapping from authored prose that approximates a column.
 | 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
 | 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | — | — | 0 |
 | 20 | 4-column box table, status marker, and a `❯` prompt wrapped over three lines | 19 prose (+13 table) | terminal | 232 | 227–232, 6 lines (5) | 5 |
+| 21 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | terminal | 174 | 162–174, 10 lines (12) | 10 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -845,9 +880,12 @@ records which. The one that did not, `W < 40`, was removed.
 That is the strongest evidence available that the rules are load-bearing rather
 than accumulated. It is not proof. Two things are worth watching:
 
-- **Five tunable thresholds** — cluster gap 8, minimum cluster 3, forced-break
-  tolerance 8, 25% exceed, 8 words per line. Each is calibrated, none is
-  arbitrary, but five is enough that a sixth should be resisted hard.
+- **Six tunable thresholds** — cluster gap 8, minimum cluster 2, forced-break
+  tolerance 8, 25% exceed, 8 words per line, padding run 32. Each is calibrated,
+  none is arbitrary, but six is past the point where the next one should be
+  resisted hard. The padding threshold is the sixth, and it was accepted only
+  because the corpus separates its two regimes by a factor of five (26 against
+  148) rather than by a judgment call.
 - **Two compound guards.** `terminalPunctuation` carries two exemptions and
   `header` three conditions. Both are the fuzziest things here, and both earn
   their place on separate fixtures — but a third exemption on either would be a
@@ -884,6 +922,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
 | 19 | Quote lines must count toward the code guardrail, not just the width estimate |
 | 20 | A wrapped prompt's continuation lines must inherit its quote gutter |
+| 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -944,6 +983,7 @@ The invariants worth checking by hand, should something look wrong:
 | Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
+| Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
 | Max fraction exceeding `W` | 25% | above this the estimate is rejected and unwrapping is skipped (§6.1) |
 | Blank-run collapse | any run → 1 | see below |
 | Marker widths | §7 | |

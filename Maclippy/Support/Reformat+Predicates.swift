@@ -64,4 +64,18 @@ extension StringProtocol {
     var trimmed: String { trimmingCharacters(in: .whitespaces) }
     var trimmedTrailing: String { String(reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }
     var indentWidth: Int { prefix { $0 == " " }.count }
+
+    /// Ranges of runs of `min`-or-more spaces, in order.
+    func ranges(ofSpaceRunAtLeast min: Int) -> [Range<Index>] {
+        var result: [Range<Index>] = []
+        var i = startIndex
+        while i < endIndex {
+            guard self[i] == " " else { i = index(after: i); continue }
+            var j = i
+            while j < endIndex, self[j] == " " { j = index(after: j) }
+            if distance(from: i, to: j) >= min { result.append(i..<j) }
+            i = j
+        }
+        return result
+    }
 }

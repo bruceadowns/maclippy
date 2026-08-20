@@ -43,7 +43,8 @@ Each one earned its place by breaking a rule that reasoning had not predicted;
 columns from 93 to 232, authored prose that only approximates a column,
 box-drawing tables, quote-bar gutters, ALL-CAPS and label-style headers, nested
 and flush-continued lists, emoji in table cells, a first line that lost its
-indent to the selection, and a response marker stacked on top of a quote gutter.
+indent to the selection, a response marker stacked on top of a quote gutter, and
+a wrap that arrived as 183 interior spaces instead of a newline.
 
 There are no code fixtures. Reformat leaves code byte-identical (§6.1), so a
 fixture pair would be a file diffed against itself — the calibration that

@@ -24,6 +24,11 @@ enum Reformat {
     static let maxAbsorbableToken = 100
     /// Above this share of lines exceeding W, the estimate is an artifact.
     static let maxExceedingW = 0.25
+    /// A run of this many interior spaces is a row boundary the terminal wrote as
+    /// padding, not alignment. Real column gutters in the corpus reach 26; padding
+    /// artifacts start at 148. Absolute rather than relative to `W`, for the same
+    /// reason as `maxAbsorbableToken`.
+    static let minPadRun = 32
     /// Below this, the text is code rather than wrapped prose (§6.1).
     static let minWordsPerLine = 8.0
 
@@ -64,7 +69,7 @@ enum Reformat {
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\u{200B}", with: "")
 
-        var lines = substituteGutters(text.components(separatedBy: "\n"))  // 3
+        var lines = substituteGutters(text.components(separatedBy: "\n").map(closePadding))  // 2b, 3
         lines = lines.map { String($0.reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }  // 4
 
         // Code guardrail: the whole pipeline is a no-op, not just unwrapping.
@@ -136,6 +141,30 @@ private extension Reformat {
         i = s.index(after: i)
         if terminator == "\u{1B}", i < s.endIndex, s[i] == "\\" { i = s.index(after: i) }
         return i
+    }
+
+    // MARK: - Stage 2b — padding as a row boundary
+
+    /// Closes a long run of interior spaces to the single space a wrap join uses.
+    /// A terminal pads a row out to its own width, so a wrapped row can reach the
+    /// clipboard as `text` + padding + the next row's first words, with the break
+    /// expressed as spaces rather than a newline. Content *after* the padding is
+    /// what says the row continued — padding at the end of a line means the row
+    /// ended there, and stage 4 already drops that.
+    ///
+    /// Not routed through the forced-break rule, which reads pre-join lengths and
+    /// would see the tail as a short line that no wrapper had to break.
+    static func closePadding(_ line: String) -> String {
+        guard !isTable(line) else { return line }   // cells pad to align
+        // Split the indent off first: it is the one leading run that may legitimately
+        // be this long, and collapsing it would flatten deeply nested output.
+        let body = line.drop { $0 == " " || $0 == "\t" }
+        var result = String(body)
+        for run in result.ranges(ofSpaceRunAtLeast: minPadRun).reversed()
+        where !result[run.upperBound...].trimmed.isEmpty {
+            result.replaceSubrange(run, with: " ")
+        }
+        return line[..<body.startIndex] + result
     }
 
     // MARK: - Stage 5 — wrap width (§6.1)
