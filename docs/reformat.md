@@ -537,10 +537,25 @@ pass 2, which is an idempotency violation.
 Table rows are exempt: cells pad to align, and fixtures 3, 10 and 14 lose their
 tables without the exemption.
 
-The threshold is absolute (32) rather than a fraction of `W`, for the same reason
-as `maxAbsorbableToken`: `W` grows once lines are joined, so a `W`-relative bound
-stops holding on a second pass. The corpus separates cleanly — real column
-gutters reach 26 (fixture 20), artifacts start at 148.
+**Why a threshold at all**, rather than collapsing every run of two or more? Prose
+has no use for a second space, so the simpler rule is tempting — and it was tried.
+It destroys fixture 15, whose side-by-side ASCII diff carries its two columns on
+one line (`pass 1:  | … |      pass 2:  | … |`) and does not match `isTable`,
+which wants a box glyph at both ends. Collapsing runs the columns together, which
+is the one thing this feature must never do.
+
+Nor can tuning save both: fixture 15's alignment runs reach **11** spaces and
+fixture 21's `file:line` listing uses 10 and 11. The two are indistinguishable by
+run length, so any threshold that spares the diff also spares the listing. The
+listing keeping alignment it does not need is the cheaper error.
+
+Interior runs across the corpus are 2–11 (alignment) and 183 (padding), so 32
+sits between them with room on both sides. It is absolute rather than a fraction
+of `W`, for the same reason as `maxAbsorbableToken`: `W` grows once lines are
+joined, so a `W`-relative bound stops holding on a second pass.
+
+Trailing runs are a separate population and need no rule — fixture 18 carries 148
+and fixture 20 carries 26, both dropped by stage 4.
 
 ### 6.2 The forced-break test
 
@@ -884,8 +899,8 @@ than accumulated. It is not proof. Two things are worth watching:
   tolerance 8, 25% exceed, 8 words per line, padding run 32. Each is calibrated,
   none is arbitrary, but six is past the point where the next one should be
   resisted hard. The padding threshold is the sixth, and it was accepted only
-  because the corpus separates its two regimes by a factor of five (26 against
-  148) rather than by a judgment call.
+  because the corpus separates its two regimes by a factor of three (11 against
+  183) rather than by a judgment call.
 - **Two compound guards.** `terminalPunctuation` carries two exemptions and
   `header` three conditions. Both are the fuzziest things here, and both earn
   their place on separate fixtures — but a third exemption on either would be a
