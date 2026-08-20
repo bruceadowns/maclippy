@@ -21,8 +21,7 @@ build: ## Build (Debug, ad-hoc signed)
 
 check: ## Run Reformat over docs/fixtures and report diffs
 	@swiftc -O -parse-as-library -o $(DERIVED_DATA)/reformat-check \
-		Maclippy/Support/Reformat.swift \
-		Maclippy/Support/Reformat+Predicates.swift \
+		$(wildcard Maclippy/Support/Reformat*.swift) \
 		Tools/reformat-check.swift
 	@$(DERIVED_DATA)/reformat-check
 

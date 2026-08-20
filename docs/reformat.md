@@ -324,6 +324,19 @@ the prose around it, and quote lines are the only kind the unwrapper refuses to
 touch. Emitting the prompt as a quote is also the right shape for the
 destination — a pasted transcript reads as alternating speech.
 
+**A wrapped prompt keeps its continuations.** A `▎` block marks every one of its
+own lines, so its extent is explicit. A `❯` prompt marks only the first — the
+terminal wrapped the rest with no gutter — and the resulting shape is *identical*
+to `⏺` followed by continuation lines, which must **not** be quoted because that
+is body prose. Same geometry, opposite meaning, told apart only by which glyph
+opened the run.
+
+So the prompt's extent is inferred positionally: it runs to the next blank line,
+and every unguttered line in that run is quoted too. Safe because a real
+transcript always has a blank between a prompt and the response after it.
+Fixture 20 is the case — without it, one typed utterance came out as a quoted
+first line followed by its own tail joined as ordinary prose.
+
 **A marker and a gutter can open the same line**, and the substitution has to
 consume both. `⏺ ▎ text` is one line of quoted assistant output: replacing only
 the leading `⏺` leaves the `▎` sitting in the text, where it fails the §9
@@ -803,6 +816,7 @@ wrapping from authored prose that approximates a column.
 | 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
 | 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
 | 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | — | — | 0 |
+| 20 | 4-column box table, status marker, and a `❯` prompt wrapped over three lines | 19 prose (+13 table) | terminal | 232 | 227–232, 6 lines (5) | 5 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -869,6 +883,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 17 | Dedent must ignore quote lines and table rules when computing the margin |
 | 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
 | 19 | Quote lines must count toward the code guardrail, not just the width estimate |
+| 20 | A wrapped prompt's continuation lines must inherit its quote gutter |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8

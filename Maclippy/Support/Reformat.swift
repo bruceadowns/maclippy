@@ -64,7 +64,7 @@ enum Reformat {
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\u{200B}", with: "")
 
-        var lines = text.components(separatedBy: "\n").map(substituteGutter)  // 3
+        var lines = substituteGutters(text.components(separatedBy: "\n"))  // 3
         lines = lines.map { String($0.reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }  // 4
 
         // Code guardrail: the whole pipeline is a no-op, not just unwrapping.
@@ -136,36 +136,6 @@ private extension Reformat {
         i = s.index(after: i)
         if terminator == "\u{1B}", i < s.endIndex, s[i] == "\\" { i = s.index(after: i) }
         return i
-    }
-
-    // MARK: - Stage 3
-
-    /// Replaces a leading marker or quote gutter. Quote gutters normalize to
-    /// `> `; markers become an equal-width replacement so columns are preserved.
-    ///
-    /// `❯` is the terminal prompt, not a rendered blockquote, so mapping it to
-    /// `> ` does invent markup — the one place §5.2's de-rendering argument does
-    /// not apply. It earns the exception structurally: a prompt is a discrete
-    /// utterance that must never merge into neighbouring prose, and quote lines
-    /// are the only kind the unwrapper will not touch.
-    static func substituteGutter(_ line: String) -> String {
-        let pad = String(repeating: " ", count: line.indentWidth)
-        let body = line.drop { $0 == " " }
-        guard let first = body.first else { return line }
-
-        if first == "▎" || first == "┃" || first == ">" || first == "❯" {
-            let rest = body.dropFirst().drop { $0 == " " }
-            return rest.isEmpty ? pad + ">" : pad + "> " + rest
-        }
-        if let replacement = markers[first] {
-            // Recurse, because a response marker is chrome and what follows it may
-            // be a real gutter: `⏺ ▎ quoted` leaves the `▎` behind otherwise, which
-            // a second pass then converts — an idempotency break (fixture 18).
-            // Quote gutters deliberately do not recurse: `> > x` is a nested
-            // blockquote, and collapsing it would drop a level.
-            return pad + replacement + substituteGutter(String(body.dropFirst().drop { $0 == " " }))
-        }
-        return line
     }
 
     // MARK: - Stage 5 — wrap width (§6.1)
