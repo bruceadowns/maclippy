@@ -420,7 +420,7 @@ corpus spans 93 to 232 (§8), so no constant is possible.
    `wcwidth` table: real complexity for a case no fixture exhibits.
 2. Sort descending, group where the gap between adjacent distinct values is
    ≤ **8**.
-3. Walk groups **highest first** and take the first that holds at least 2 lines
+3. Walk groups **highest first** and take the first that holds at least 3 lines
    *and* survives the exceed check below — not the group with the most lines.
 4. `W` = that group's maximum. If no group holds 2 lines, fall back to the
    **highest** group that passed the exceed check, however few lines it has. A
@@ -899,11 +899,11 @@ wrapping from authored prose that approximates a column.
 | 5 | Risks + acceptance criteria; header abutting a list | 21 | authored | 95 | 70–95, 16 lines (25) | 7 |
 | 6 | Status summary; column-0 hard wraps | 9 | terminal | 187 | 181–187, 3 lines (6) | 3 |
 | 7 | Ticket draft; label headers, `---` rule, long paragraphs | 26 | terminal | 232 | 216–232, 10 lines (16) | 10 |
-| 8 | Four bullets, one wrapped | 5 | terminal | 181 | 173–181, 2 lines (8) | 1 |
+| 8 | Four bullets, one wrapped | 5 | terminal | 223 (lone fallback) | 173–181, 2 lines (8) | 1 |
 | 9 | Ticket draft; first line missing its indent | 29 | terminal | 232 | 224–232, 8 lines (8) | 10 |
 | 10 | Summary + 21-row, 3-column box table with emoji cells | 9 prose (+21 table) | terminal | 165 | 160–165, 3 lines (5) | 3 |
 | 11 | Push summary + `▎` quote-bar blocks | 17 | terminal | 232 | 219–232, 8 lines (13) | 5 |
-| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | 118 | no join survives the guards | 0 |
+| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | 204 | no join survives the guards | 0 |
 | 13 | Prose interleaved with indented examples and a `>` quote block | 16 | terminal | 202 | 201–202, 3 lines (1) | 3 |
 | 14 | Prose + 11-row box table with `✓`/`✗` cells and a blank header cell | 10 prose (+11 table) | terminal | 202 | 198–202, 3 lines (4) | 4 |
 | 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 204 | 199–204, 3 lines (5) | 3 |
@@ -926,9 +926,11 @@ where tool output dominates the length distribution and every candidate join is
 declined by a guard.
 
 **The `W` column is measured, not asserted** — it is what `estimateWidth` returns
-at stage 5. Four rows had drifted from the implementation and were corrected when
-fixture 22 made the estimator worth re-measuring. A stale calibration table is
-worse than none, since it is the thing a future change gets checked against.
+at stage 5, re-measured whenever the estimator changes. Rows 12, 15, 17 and 19
+had drifted and are corrected. Row 8's `223` is *not* drift, though it was
+briefly mistaken for it: it is what the estimator returns with the cluster
+minimum at 3, which is the value in force. `W` is a function of the
+configuration, so re-measure the column rather than reasoning about it.
 
 **Fixture 18's zero joins are not a miss.** Its width estimate is correct and
 every long line is a quote line, which §5.2 declines to unwrap; the four
@@ -948,12 +950,12 @@ records which. The one that did not, `W < 40`, was removed.
 That is the strongest evidence available that the rules are load-bearing rather
 than accumulated. It is not proof. Two things are worth watching:
 
-- **Six tunable thresholds** — cluster gap 8, minimum cluster 2, forced-break
-  tolerance 8, 25% exceed, 8 words per line, padding run 32. Each is calibrated,
-  none is arbitrary, but six is past the point where the next one should be
-  resisted hard. The padding threshold is the sixth, and it was accepted only
-  because the corpus separates its two regimes by a factor of three (11 against
-  183) rather than by a judgment call.
+- **Seven tunable thresholds** — cluster gap 8, minimum cluster 3, forced-break
+  tolerance 8, absorbable token 100, 25% exceed, 8 words per line, padding run
+  32. An earlier count here said six and omitted the token cap, which is the
+  wrong direction for a number whose whole purpose is to be watched. Each is
+  calibrated and none is arbitrary, but seven is past the point where the next
+  one gets refused rather than debated.
 - **Two compound guards.** `terminalPunctuation` carries two exemptions and
   `header` three conditions. Both are the fuzziest things here, and both earn
   their place on separate fixtures — but a third exemption on either would be a
@@ -964,6 +966,22 @@ existing rules, or expose a *bug* in one. Fixtures 5, 10 and 14 moved nothing;
 13 revealed a flaw in the estimator. That is the healthy pattern. If three
 consecutive samples each require a *new* rule, the design is over-fitting and the
 right response is to simplify, not to keep adding.
+
+**That rule fired at fixture 23**, and this is what the audit found. Fixtures 21,
+22 and 23 each added a rule, so all three were tested for removal rather than
+argued about:
+
+| Rule | Test | Verdict |
+|---|---|---|
+| Padding run (21) | delete the stage | fixture 21 stops being idempotent — **load-bearing** |
+| Lone-candidate fallback (22) | drop it, or allow any 1-line cluster | without it a once-wrapped paragraph cannot be measured; allowing every lone cluster costs fixture 1 its joins — **load-bearing, and adds no constant** |
+| Wrapped cells (23) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
+
+All three survive, but the audit did find one redundancy: fixture 16's lowering
+of the cluster minimum to 2 was subsumed by the fallback, so it went back to 3
+with the whole corpus still passing. Two of the three additions cost no new
+constant, and the one that did (padding) is the one to remove first if a later
+sample shows a cheaper way to reach the same output.
 
 Each sample forced a rule that no amount of reasoning had produced:
 
@@ -985,7 +1003,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 13 | **Highest cluster, not most populous** — the estimator was picking short-line clusters in any document with headers and examples |
 | 14 | Nothing — empty header cells, `✓`/`✗` in cells, and a row with 110 trailing spaces all pass through unchanged |
 | 15 | A table block must contain a **rule row** — a lone pipe-delimited line is ASCII art, and converting it invented header and delimiter rows |
-| 16 | Cluster minimum of 2, tested highest-first; the token cap must be absolute, not `W`-relative |
+| 16 | Tested highest-first; the token cap must be absolute, not `W`-relative. It also forced the cluster minimum down to 2, which was **put back to 3** at fixture 22 once the lone-candidate fallback covered this case — one rule replacing a calibration tweak |
 | 17 | Dedent must ignore quote lines and table rules when computing the margin |
 | 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
 | 19 | Quote lines must count toward the code guardrail, not just the width estimate |
@@ -1050,7 +1068,7 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs authored-prose drift |
-| Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 2 |
+| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |

@@ -16,7 +16,10 @@ enum Reformat {
     /// Slack in the forced-break test; absorbs prose that only approximates a column.
     static let breakTolerance = 8
     /// A cluster smaller than this is coincidence, not evidence of a wrap column.
-    static let minClusterLines = 2
+    /// Lowered to 2 for fixture 16 and put back once the lone-candidate fallback
+    /// covered that case; the corpus passes at either value, so the constant has
+    /// slack rather than sitting on a knife edge.
+    static let minClusterLines = 3
     /// A line-initial token longer than this is a path, URL or identifier sitting
     /// on its own line, never a word the wrapper pushed down. Absolute rather than
     /// relative to `W`, because `W` grows once lines are joined — a `W`-relative
