@@ -55,6 +55,8 @@ enum Reformat {
         "\u{00B7}": "*"                          // ·
     ]
 
+    /// Gutters that mean "quoted", all normalizing to `> `.
+    static let quoteGlyphs: Set<Character> = ["▎", "┃", ">", "❯"]
     static let boxChars = Set("│┌├└┬┴┼─╭╰┏┗┣┃┐┤┘╮╯┓┛┫|")
     private static let cellSeparators = Set("│┃|")
 
@@ -69,17 +71,12 @@ enum Reformat {
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\u{200B}", with: "")
 
-        var lines = substituteGutters(text.components(separatedBy: "\n").map(closePadding))  // 2b, 3
-        lines = lines.map { String($0.reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }  // 4
+        // Padding closes *after* stage 3, so its table exemption sees a marker-led
+        // row (`⏺ │ a │ b │`) as the table it is.
+        var lines = substituteGutters(text.components(separatedBy: "\n")).map(closePadding)  // 3, 3b
+        lines = lines.map { $0.trimmedTrailing }                         // 4
 
-        // Code guardrail: the whole pipeline is a no-op, not just unwrapping.
-        // Quote lines count here even though they are never joined. Their content
-        // is prose, and it is evidence the document is prose — excluding them made
-        // a mostly-quoted paste look like code and skipped the pipeline entirely.
-        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }
-        let wordsPerLine = measurable.isEmpty ? 0
-            : Double(measurable.reduce(0) { $0 + $1.split(separator: " ").count }) / Double(measurable.count)
-        guard wordsPerLine >= minWordsPerLine else { return input }  // verbatim
+        guard !isCode(lines) else { return input }   // verbatim (§6.1)
 
         let width = estimateWidth(lines)                                // 5
         let joins = width.map { forcedBreaks(lines, width: $0) } ?? []  // 6
@@ -159,12 +156,17 @@ private extension Reformat {
         // Split the indent off first: it is the one leading run that may legitimately
         // be this long, and collapsing it would flatten deeply nested output.
         let body = line.drop { $0 == " " || $0 == "\t" }
-        var result = String(body)
-        for run in result.ranges(ofSpaceRunAtLeast: minPadRun).reversed()
-        where !result[run.upperBound...].trimmed.isEmpty {
-            result.replaceSubrange(run, with: " ")
+        guard body.contains(String(repeating: " ", count: minPadRun)) else { return line }
+        var result = ""
+        var run = 0
+        for character in body {
+            guard character != " " else { run += 1; continue }
+            result += run >= minPadRun ? " " : String(repeating: " ", count: run)
+            result.append(character)
+            run = 0
         }
-        return line[..<body.startIndex] + result
+        // A run with nothing after it is trailing, not a break; stage 4 drops it.
+        return line[..<body.startIndex] + result + String(repeating: " ", count: run)
     }
 
     // MARK: - Stage 5 — wrap width (§6.1)
@@ -190,13 +192,14 @@ private extension Reformat {
         // checks. Picking one and giving up when it fails loses the real column
         // whenever short lines happen to form a bigger cluster than the wrapped
         // ones — which is common when only a couple of lines actually wrapped.
-        for cluster in clusters.sorted(by: { $0.max()! > $1.max()! }) {
-            let lo = cluster.min()!, hi = cluster.max()!
+        // `clusters` is already ordered highest-first: it is built by walking the
+        // distinct lengths downward, so each new cluster holds smaller values.
+        for cluster in clusters {
+            guard let hi = cluster.first, let lo = cluster.last else { continue }
             guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else { continue }
-            let candidate = hi
-            guard Double(lengths.filter { $0 > candidate }.count)
+            guard Double(lengths.filter { $0 > hi }.count)
                 <= maxExceedingW * Double(lengths.count) else { continue }
-            return candidate
+            return hi
         }
         return nil
     }
@@ -205,7 +208,7 @@ private extension Reformat {
 
     /// Indices `i` where line `i` should absorb line `i+1`.
     static func forcedBreaks(_ lines: [String], width: Int) -> [Int] {
-        let inList = listMembership(lines)
+        let inList = runMembership(lines, openedBy: startsListItem)
         var result: [Int] = []
 
         for i in 0..<max(0, lines.count - 1) {

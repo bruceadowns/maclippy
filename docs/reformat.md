@@ -156,8 +156,8 @@ once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
 |---|---|---|
 | 1 | Strip ANSI/OSC escapes, zero-width characters | `\u{1B}[…m`, `\u{200B}` |
 | 2 | Normalize line endings, NBSP → space | CRLF/CR → LF |
-| 2b | Close a run of ≥ `minPadRun` interior spaces to one space | terminal row padding standing in for a wrap; tables exempt |
 | 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> `, and recurses after a marker so `⏺ ▎` yields both (§5.2) |
+| 3b | Close a run of ≥ `minPadRun` interior spaces to one space | §6.1.1; terminal row padding standing in for a wrap, tables exempt |
 | 4 | Strip trailing whitespace from every line | |
 | 5 | Estimate wrap width | §6.1; tables excluded |
 | 6 | Unwrap forced breaks | §6.2 |
@@ -177,9 +177,13 @@ interchangeable when it is not:
   (`⏺`) or ASCII (`⎿` → `|_`). Every sample in §8 depends on this.
 - **Stage 3 must precede 5.** Width estimation measures text, not gutters, and
   must not measure table rows.
-- **Stage 2b must precede 5.** A padded line is an outlier — 356 characters where
-  the column is 171 (fixture 21) — and two of them are enough to form a cluster
-  at the top of the distribution and be taken for the wrap column.
+- **Stage 3b sits between 3 and 5, and both sides matter.** It must precede 5
+  because a padded line is an outlier — 356 characters where the column is 171
+  (fixture 21) — and two of them are enough to form a cluster at the top of the
+  distribution and be taken for the wrap column. It must *follow* 3 because its
+  table exemption reads the line: run earlier, a marker-led row (`⏺ │ a │ b │`)
+  is not yet a table, and its cell padding collapses while its unmarked siblings
+  keep theirs. No fixture carries that shape; it was found by inspection.
 - **Stage 4 must precede 6.** Width estimation and the forced-break arithmetic
   both measure line length, and trailing spaces would inflate it.
 
@@ -211,13 +215,19 @@ One golden fixture (§9) exists solely to fail if this order changes.
 ## 5. Line predicates
 
 There is no segmentation pass and no block objects. Line kind is decided by five
-independent predicates, each a pure function of one line (or, for `inList`, a
-single forward scan). The unwrapper consults them at each candidate join.
+independent predicates, each a pure function of one line. The unwrapper consults
+them at each candidate join.
+
+`inList` is the exception and the pipeline's **only** state: membership in a run
+that a predicate opens and the next blank line closes. One fold expresses it, and
+two callers share it — list continuations here, and a `❯` prompt's continuations
+in §5.2, which have the same shape for the same reason (the opening line carries
+the marker and the rest carry nothing).
 
 | Predicate | True when | Effect on a join |
 |---|---|---|
 | `isTable` | trimmed line starts with `│┌├└┬┴┼─╭╰┏┗┣` or `\|` **and** ends with the mirror set | never joins, either side (§5.1) |
-| `isQuote` | line opens with `▎`, `┃`, `❯` or `>` | never joins, either side (§5.2) |
+| `isQuote` | line opens with `>` — stage 3 has already normalized `▎`, `┃` and `❯` to it | never joins, either side (§5.2) |
 | `isHeader` | ALL-CAPS after stripping a trailing parenthetical, **and** not ending in `.?!` | never joins, either side |
 | `isListStart` | line begins `- `, `* `, `+ `, `N. `, `N) ` | never joined *into* |
 | `inList` | line is a list item, or follows one without an intervening blank | relaxes `terminalPunctuation` (§6.3) |
@@ -556,6 +566,9 @@ joined, so a `W`-relative bound stops holding on a second pass.
 
 Trailing runs are a separate population and need no rule — fixture 18 carries 148
 and fixture 20 carries 26, both dropped by stage 4.
+
+The stage runs after marker substitution so that its table exemption sees a
+marker-led row as the table it is (§4).
 
 ### 6.2 The forced-break test
 

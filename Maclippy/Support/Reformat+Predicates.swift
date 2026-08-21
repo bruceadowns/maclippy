@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Line predicates (§5)
+// MARK: - Line predicates (§5) and whole-document classification (§6.1)
 
 extension Reformat {
 
@@ -40,15 +40,31 @@ extension Reformat {
         return after.dropFirst().first.map { $0 == " " || $0 == "\t" } ?? false
     }
 
-    /// True for a list item and for the continuation lines that follow it, up to
-    /// the next blank. Used only to relax `terminalPunctuation` (§6.3).
-    static func listMembership(_ lines: [String]) -> [Bool] {
+    /// Mean words per line, under which the text is code and the **whole**
+    /// pipeline is a no-op, not just unwrapping.
+    ///
+    /// Quote lines count here even though they are never joined. Their content is
+    /// prose and it is evidence the document is prose — excluding them made a
+    /// mostly-quoted paste read as code and skipped the pipeline entirely.
+    static func isCode(_ lines: [String]) -> Bool {
+        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }
+        guard !measurable.isEmpty else { return true }
+        let words = measurable.reduce(0) { $0 + $1.split(separator: " ").count }
+        return Double(words) / Double(measurable.count) < minWordsPerLine
+    }
+
+    /// Marks each line's membership in a run that `opens` starts and the next
+    /// blank line ends — the opening line included. The one shape in this design
+    /// that a per-line predicate cannot express, and the only state anywhere in
+    /// the pipeline: a list item's continuations carry no marker (§6.3), and
+    /// neither do a `❯` prompt's (§5.2). Both are this fold.
+    static func runMembership(_ lines: [String], openedBy opens: (String) -> Bool) -> [Bool] {
         var result: [Bool] = []
         var inside = false
         for line in lines {
             if line.trimmed.isEmpty {
                 inside = false
-            } else if startsListItem(line) {
+            } else if opens(line) {
                 inside = true
             }
             result.append(inside)
@@ -64,18 +80,4 @@ extension StringProtocol {
     var trimmed: String { trimmingCharacters(in: .whitespaces) }
     var trimmedTrailing: String { String(reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }
     var indentWidth: Int { prefix { $0 == " " }.count }
-
-    /// Ranges of runs of `min`-or-more spaces, in order.
-    func ranges(ofSpaceRunAtLeast min: Int) -> [Range<Index>] {
-        var result: [Range<Index>] = []
-        var i = startIndex
-        while i < endIndex {
-            guard self[i] == " " else { i = index(after: i); continue }
-            var j = i
-            while j < endIndex, self[j] == " " { j = index(after: j) }
-            if distance(from: i, to: j) >= min { result.append(i..<j) }
-            i = j
-        }
-        return result
-    }
 }

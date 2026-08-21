@@ -4,39 +4,27 @@ import Foundation
 
 extension Reformat {
 
-    /// Runs the gutter substitution over every line, carrying one piece of state:
-    /// a `❯` prompt has no gutter on its continuation lines, so its extent has to
-    /// be inferred. It runs to the next blank line, and those continuations are
-    /// quoted too.
+    /// A `❯` prompt gutters only its first line, so its extent is inferred: it
+    /// runs to the next blank, and those continuations are quoted too.
     ///
-    /// Only the prompt needs this. A `▎` block marks every one of its own lines,
-    /// and an `⏺` response marker introduces body prose that should *not* be
-    /// quoted — so the same shape means different things depending on which glyph
-    /// opened it, and only the prompt can be inferred from position.
+    /// Only the prompt needs that. A `▎` block marks every one of its own lines,
+    /// and an `⏺` response marker introduces body prose that must *not* be quoted
+    /// — the same shape means opposite things depending on the opening glyph, and
+    /// the prompt is the only one whose extent position can supply. A line already
+    /// carrying a gutter of its own keeps it, which is what stops an `⏺` response
+    /// abutting a prompt from being swallowed into the quote.
     static func substituteGutters(_ lines: [String]) -> [String] {
-        var result: [String] = []
-        var inPrompt = false
-        for line in lines {
-            if line.trimmed.isEmpty {
-                inPrompt = false
-                result.append(line)
-                continue
-            }
-            let opensPrompt = line.drop { $0 == " " }.first == "❯"
-            if inPrompt, !isGutter(line) {
-                result.append(String(repeating: " ", count: line.indentWidth) + "> " + line.trimmed)
-            } else {
-                result.append(substituteGutter(line))
-                if opensPrompt { inPrompt = true }
-            }
+        let prompted = runMembership(lines) { $0.drop { $0 == " " }.first == "❯" }
+        return zip(lines, prompted).map { line, isPrompted in
+            guard isPrompted, !isGutter(line) else { return substituteGutter(line) }
+            return String(repeating: " ", count: line.indentWidth) + "> " + line.trimmed
         }
-        return result
     }
 
     /// True when the line already opens with a marker or quote glyph of its own.
     static func isGutter(_ line: String) -> Bool {
         guard let first = line.drop(while: { $0 == " " }).first else { return false }
-        return first == "▎" || first == "┃" || first == ">" || first == "❯" || markers[first] != nil
+        return quoteGlyphs.contains(first) || markers[first] != nil
     }
 
     /// Replaces a leading marker or quote gutter. Quote gutters normalize to
@@ -52,7 +40,7 @@ extension Reformat {
         let body = line.drop { $0 == " " }
         guard let first = body.first else { return line }
 
-        if first == "▎" || first == "┃" || first == ">" || first == "❯" {
+        if quoteGlyphs.contains(first) {
             let rest = body.dropFirst().drop { $0 == " " }
             return rest.isEmpty ? pad + ">" : pad + "> " + rest
         }
