@@ -194,14 +194,22 @@ private extension Reformat {
         // ones — which is common when only a couple of lines actually wrapped.
         // `clusters` is already ordered highest-first: it is built by walking the
         // distinct lengths downward, so each new cluster holds smaller values.
+        var lonely: Int?
         for cluster in clusters {
             guard let hi = cluster.first, let lo = cluster.last else { continue }
-            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else { continue }
             guard Double(lengths.filter { $0 > hi }.count)
                 <= maxExceedingW * Double(lengths.count) else { continue }
+            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else {
+                lonely = lonely ?? hi   // highest-first, so the first one seen is the highest
+                continue
+            }
             return hi
         }
-        return nil
+        // A paragraph wrapped N times puts only N-1 lines at the column, so a
+        // single wrap can never form a cluster. Trust the lone candidate only when
+        // no populated one exists anywhere below it — that is what separates the
+        // one-wrap paragraph from a stray long line above a real column.
+        return lonely
     }
 
     // MARK: - Stage 6 — unwrapping (§6.2, §6.3)

@@ -406,7 +406,19 @@ corpus spans 93 to 232 (§8), so no constant is possible.
    ≤ **8**.
 3. Walk groups **highest first** and take the first that holds at least 2 lines
    *and* survives the exceed check below — not the group with the most lines.
-4. `W` = that group's maximum.
+4. `W` = that group's maximum. If no group holds 2 lines, fall back to the
+   **highest** group that passed the exceed check, however few lines it has. A
+   paragraph wrapped *N* times leaves only *N-1* lines at the column, so a
+   paragraph wrapped exactly once can never form a group — and that is the most
+   ordinary paste there is (fixture 22). The fallback applies only when nothing
+   populated exists anywhere below, which is what separates a one-wrap paragraph
+   from a stray long line sitting above a real column: in fixture 1 a lone
+   120-character line loses to the 31-line column at 95, as it must.
+
+   What keeps this safe is `terminalPunctuation` (§6.3). The fallback's exposure
+   is a long line followed by a short one, and when the long line ends a sentence
+   the join is already declined — so the shape it can act on is a line that
+   breaks mid-sentence, which is a wrap by definition.
 5. **Reject the estimate entirely** — skip unwrapping — if either check fails:
    - more than **25%** of measurable lines exceed `W`. A greedy wrapper never
      emits a line longer than its column, so a document where many lines do was
@@ -595,8 +607,13 @@ characters, and the longest legitimately joined one is 77 against the path's
 An earlier draft also required `len(N) ≤ W`. It was removed as redundant: every
 case it caught (sample 1's `RELATED TICKETS` entries) is already caught by
 `terminalPunctuation`. Its presence had also forced a workaround: a cluster-size
-fallback in §6.1 existed purely because the ceiling blocked sample 8's only join.
-Removing the ceiling removed the need for the fallback too.
+fallback in §6.1 existed purely because the ceiling blocked sample 8's only join,
+and removing the ceiling removed that need.
+
+The fallback is back, for an unrelated reason — a paragraph wrapped once cannot
+form a cluster at all (§6.1 step 4, fixture 22). Worth recording as a caution
+about ablation: "removing it changes no output" proves the corpus lacks the case,
+not that the rule is unnecessary.
 
 The tolerance exists because not all input comes from a fixed-column wrapper,
 and the corpus shows the two regimes plainly in their cluster spreads (§8):
@@ -866,29 +883,35 @@ wrapping from authored prose that approximates a column.
 | 5 | Risks + acceptance criteria; header abutting a list | 21 | authored | 95 | 70–95, 16 lines (25) | 7 |
 | 6 | Status summary; column-0 hard wraps | 9 | terminal | 187 | 181–187, 3 lines (6) | 3 |
 | 7 | Ticket draft; label headers, `---` rule, long paragraphs | 26 | terminal | 232 | 216–232, 10 lines (16) | 10 |
-| 8 | Four bullets, one wrapped | 5 | terminal | **223** (max fallback) | 173–181, 2 lines (8) | 1 |
+| 8 | Four bullets, one wrapped | 5 | terminal | 181 | 173–181, 2 lines (8) | 1 |
 | 9 | Ticket draft; first line missing its indent | 29 | terminal | 232 | 224–232, 8 lines (8) | 10 |
 | 10 | Summary + 21-row, 3-column box table with emoji cells | 9 prose (+21 table) | terminal | 165 | 160–165, 3 lines (5) | 3 |
 | 11 | Push summary + `▎` quote-bar blocks | 17 | terminal | 232 | 219–232, 8 lines (13) | 5 |
-| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | — | rejected | 0 |
+| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | 118 | no join survives the guards | 0 |
 | 13 | Prose interleaved with indented examples and a `>` quote block | 16 | terminal | 202 | 201–202, 3 lines (1) | 3 |
 | 14 | Prose + 11-row box table with `✓`/`✗` cells and a blank header cell | 10 prose (+11 table) | terminal | 202 | 198–202, 3 lines (4) | 4 |
-| 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 202 | 199–202, 3 lines (3) | 3 |
+| 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 204 | 199–204, 3 lines (5) | 3 |
 | 16 | Bullet summary where only two lines reached the column | 10 | terminal | 242 | 241–242, 2 lines (1) | 2 |
-| 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
+| 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | 420 (lone fallback) | every long line is a quote or a rule | 0 |
 | 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
-| 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | — | — | 0 |
+| 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | 170 | every long line is a quote | 0 |
 | 20 | 4-column box table, status marker, and a `❯` prompt wrapped over three lines | 19 prose (+13 table) | terminal | 232 | 227–232, 6 lines (5) | 5 |
 | 21 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | terminal | 174 | 162–174, 10 lines (12) | 10 |
+| 22 | One paragraph, wrapped exactly once | 2 | terminal | 233 | 233, 1 line (lone fallback) | 1 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
 That is the shift-invariance argument of §4, confirmed empirically rather than
 only proved.
 
-**Zero false joins across the corpus.** Two known misses, both conservative:
-fixture 8 (no cluster reaches 3 lines) and fixture 12 (tool output dominates the
-length distribution, so no column can be established).
+**Zero false joins across the corpus.** One known miss, conservative: fixture 12,
+where tool output dominates the length distribution and every candidate join is
+declined by a guard.
+
+**The `W` column is measured, not asserted** — it is what `estimateWidth` returns
+at stage 5. Four rows had drifted from the implementation and were corrected when
+fixture 22 made the estimator worth re-measuring. A stale calibration table is
+worse than none, since it is the thing a future change gets checked against.
 
 **Fixture 18's zero joins are not a miss.** Its width estimate is correct and
 every long line is a quote line, which §5.2 declines to unwrap; the four
@@ -939,7 +962,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 8 | A cluster under 3 lines is coincidence, not evidence — fall back to the longest line |
 | 9 | The `terminalPunctuation` wrap-column exemption; dedent must ignore a lone-minimum indent |
 | 10 | Nothing — 3-column tables and emoji cells pass through unchanged |
-| — | **Simplification pass:** ablation removed `hardBreak`, `indentMismatch`, the `len(N) ≤ W` ceiling and the cluster-size fallback with zero behavioral change |
+| — | **Simplification pass:** ablation removed `hardBreak`, `indentMismatch`, the `len(N) ≤ W` ceiling and the cluster-size fallback with zero behavioral change (the fallback came back at fixture 22, on evidence the corpus did not then contain) |
 | 11 | `▎` quote-bar gutters — one marker-table row, no new rule |
 | 12 | Calibrated `⎿` at width 3 (was speculative); generalized the marker table from widths to fixed-width replacement strings |
 | 13 | **Highest cluster, not most populous** — the estimator was picking short-line clusters in any document with headers and examples |
@@ -951,6 +974,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 19 | Quote lines must count toward the code guardrail, not just the width estimate |
 | 20 | A wrapped prompt's continuation lines must inherit its quote gutter |
 | 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
+| 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -1008,7 +1032,7 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs authored-prose drift |
-| Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first |
+| Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 2 |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
