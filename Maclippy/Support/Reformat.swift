@@ -58,7 +58,6 @@ enum Reformat {
     /// Gutters that mean "quoted", all normalizing to `> `.
     static let quoteGlyphs: Set<Character> = ["▎", "┃", ">", "❯"]
     static let boxChars = Set("│┌├└┬┴┼─╭╰┏┗┣┃┐┤┘╮╯┓┛┫|")
-    private static let cellSeparators = Set("│┃|")
 
     // MARK: - Entry point
 
@@ -274,56 +273,6 @@ private extension Reformat {
             ? unique[1] : smallest
         return lines.map { line in
             line.trimmed.isEmpty ? "" : String(line.dropFirst(min(line.indentWidth, amount)))
-        }
-    }
-
-    // MARK: - Stage 8 — box tables → Markdown (§5.1)
-
-    static func convertTables(_ lines: [String]) -> [String] {
-        var result: [String] = []
-        var block: [String] = []
-        for line in lines {
-            if isTable(line) {
-                block.append(line)
-            } else {
-                if !block.isEmpty { result += convert(block); block = [] }
-                result.append(line)
-            }
-        }
-        if !block.isEmpty { result += convert(block) }
-        return result
-    }
-
-    static func convert(_ block: [String]) -> [String] {
-        // Without a rule row it is ASCII art, not a table. Converting a lone
-        // pipe-delimited line invents a header and a delimiter for it.
-        guard block.contains(where: isRuleRow) else { return block }
-        let rows = block.filter { !isRuleRow($0) }.map(cells)
-        guard let first = rows.first else { return block }
-        guard rows.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
-
-        let delimiter = Array(repeating: "---", count: first.count)
-        return ([first, delimiter] + rows.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
-    }
-
-    static func cells(_ line: String) -> [String] {
-        var parts = line.trimmed.split(omittingEmptySubsequences: false, whereSeparator: cellSeparators.contains)
-            .map { $0.trimmed.replacingOccurrences(of: "|", with: "\\|") }
-        if parts.first?.isEmpty == true { parts.removeFirst() }
-        if parts.last?.isEmpty == true { parts.removeLast() }
-        return parts
-    }
-
-    /// A box rule (`├──┼──┤`) or a Markdown delimiter (`| --- | --- |`).
-    /// Recognizing the second is what stops a converted table growing a
-    /// delimiter row on every run.
-    static func isRuleRow(_ line: String) -> Bool {
-        guard isTable(line) else { return false }
-        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }) { return true }
-        let c = cells(line)
-        return !c.isEmpty && c.allSatisfy { cell in
-            let core = cell.drop { $0 == ":" }.reversed().drop { $0 == ":" }
-            return !core.isEmpty && core.allSatisfy { $0 == "-" }
         }
     }
 

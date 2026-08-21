@@ -150,7 +150,10 @@ and its absence from terminal output is why any of this is heuristic.
 ## 4. Pipeline
 
 An ordered list of stages. The array **is** the specification; it is declared
-once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
+once as `Reformat.apply` (`Maclippy/Support/Reformat.swift`) and mirrored here.
+Two stages are large enough to own a file — stage 3 in `Reformat+Gutters.swift`
+and stage 8 in `Reformat+Tables.swift` — and the predicates plus the code
+guardrail live in `Reformat+Predicates.swift`.
 
 | # | Stage | Notes |
 |---|---|---|
@@ -299,11 +302,24 @@ destination.
 Verified against sample 3: the 11-row block becomes a 6-line Markdown table,
 cells intact.
 
-**Known limitation:** a cell whose content wraps across several physical lines is
-not reassembled — each `│`-delimited line becomes one row. Distinguishing "new
-row" from "continuation of the row above" requires a convention the source does
-not always carry, and no sample in the corpus (§8) exercises it. Sample 3
-separates every row with `├──┼──┤`, which is unambiguous.
+7. **Wrapped cells are reassembled.** A cell too wide for its column continues
+   on the next physical line, so a rule-delimited segment holding several lines
+   is *one* logical row: each column's fragments join with a space, empties
+   dropped. Fixture 23 centers its cells vertically — the file name sits on the
+   middle line of three — so position within the segment carries no meaning and
+   only the column does.
+
+   This is licensed by the table's own convention, not guessed. Every box table
+   in the corpus rules between every row (fixture 3: 5 data rows and 4 interior
+   rules; 10: 10 and 9; 14: 5 and 4; 20: 6 and 5), and fixture 23's 5 physical
+   data rows against 2 interior rules is what marks the extras as continuations.
+
+   **The test is two interior rules, not one.** A rule with a data row on each
+   side proves the table separates *data* from data. A single interior rule
+   proves nothing — it is the header separator, and Reformat's own Markdown
+   output has exactly one, so reading it as a row boundary would fold that whole
+   table into one row on a second pass. With one rule the physical rows are
+   emitted as they stand, which is the old conservative behavior.
 
 ### 5.2 Quote blocks
 
@@ -898,6 +914,7 @@ wrapping from authored prose that approximates a column.
 | 20 | 4-column box table, status marker, and a `❯` prompt wrapped over three lines | 19 prose (+13 table) | terminal | 232 | 227–232, 6 lines (5) | 5 |
 | 21 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | terminal | 174 | 162–174, 10 lines (12) | 10 |
 | 22 | One paragraph, wrapped exactly once | 2 | terminal | 233 | 233, 1 line (lone fallback) | 1 |
+| 23 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | terminal | 231 | 231, 1 line (lone fallback) | 1 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -975,6 +992,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 20 | A wrapped prompt's continuation lines must inherit its quote gutter |
 | 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
 | 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
+| 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -1054,8 +1072,6 @@ fires on any sample.
   covers GitLab and Jira Cloud both (§5.1); wiki markup would only pay off for a
   legacy Jira text field, and a second emitter means a second output format to
   test.
-- **Multi-line table cells** — reassembling a cell wrapped across physical rows
-  (§5.1 limitation). Needs a sample that exercises it.
 - **Per-clip Reformat** in the Clips tab. Live pasteboard only for now.
 - **Keyboard shortcut.** §4.7 / §9 — no hotkeys in v1.
 - **Sentence-case header detection.** Every header across ten samples has had a
