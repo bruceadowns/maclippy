@@ -222,10 +222,11 @@ independent predicates, each a pure function of one line. The unwrapper consults
 them at each candidate join.
 
 `inList` is the exception and the pipeline's **only** state: membership in a run
-that a predicate opens and the next blank line closes. One fold expresses it, and
-two callers share it — list continuations here, and a `❯` prompt's continuations
-in §5.2, which have the same shape for the same reason (the opening line carries
-the marker and the rest carry nothing).
+that a predicate opens and the first line unable to belong to it closes — a
+blank, or a table row. One fold expresses it, and two callers share it — list
+continuations here, and a `❯` prompt's continuations in §5.2, which have the same
+shape for the same reason (the opening line carries the marker and the rest carry
+nothing).
 
 | Predicate | True when | Effect on a join |
 |---|---|---|
@@ -361,11 +362,17 @@ to `⏺` followed by continuation lines, which must **not** be quoted because th
 is body prose. Same geometry, opposite meaning, told apart only by which glyph
 opened the run.
 
-So the prompt's extent is inferred positionally: it runs to the next blank line,
-and every unguttered line in that run is quoted too. Safe because a real
-transcript always has a blank between a prompt and the response after it.
-Fixture 20 is the case — without it, one typed utterance came out as a quoted
-first line followed by its own tail joined as ordinary prose.
+So the prompt's extent is inferred positionally: it runs to the next blank line
+**or table row**, and every unguttered line in that run is quoted too. Fixture 20
+is the case — without it, one typed utterance came out as a quoted first line
+followed by its own tail joined as ordinary prose.
+
+An earlier draft ended the run at a blank alone, on the claim that a real
+transcript always puts one between a prompt and what follows. That is false, and
+fixture 24 is the counter-example: the CLI brackets its prompt in `─` rules with
+no blank anywhere near it, so the closing rule and the status footer beneath it
+were both quoted as though the user had typed them. A table row cannot be a
+prompt continuation, so it closes the run.
 
 **A marker and a gutter can open the same line**, and the substitution has to
 consume both. `⏺ ▎ text` is one line of quoted assistant output: replacing only
@@ -915,6 +922,7 @@ wrapping from authored prose that approximates a column.
 | 21 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | terminal | 174 | 162–174, 10 lines (12) | 10 |
 | 22 | One paragraph, wrapped exactly once | 2 | terminal | 233 | 233, 1 line (lone fallback) | 1 |
 | 23 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | terminal | 231 | 231, 1 line (lone fallback) | 1 |
+| 24 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks, a `❯` prompt bracketed by `─` rules with no blank line | 62 prose (+2 rules) | terminal | 237 | 230–237, 12 lines (7) | 4 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1011,6 +1019,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
 | 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
 | 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
+| 24 | A run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8

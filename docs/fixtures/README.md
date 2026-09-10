@@ -46,7 +46,8 @@ and flush-continued lists, emoji in table cells, a first line that lost its
 indent to the selection, a response marker stacked on top of a quote gutter, and
 a wrap that arrived as 183 interior spaces instead of a newline, and a
 paragraph wrapped exactly once, and a table whose cells wrap across three
-physical rows and sit vertically centered.
+physical rows and sit vertically centered, and a prompt bracketed by rules with
+no blank line to end it.
 
 There are no code fixtures. Reformat leaves code byte-identical (§6.1), so a
 fixture pair would be a file diffed against itself — the calibration that

@@ -53,16 +53,21 @@ extension Reformat {
         return Double(words) / Double(measurable.count) < minWordsPerLine
     }
 
-    /// Marks each line's membership in a run that `opens` starts and the next
-    /// blank line ends — the opening line included. The one shape in this design
-    /// that a per-line predicate cannot express, and the only state anywhere in
-    /// the pipeline: a list item's continuations carry no marker (§6.3), and
-    /// neither do a `❯` prompt's (§5.2). Both are this fold.
+    /// Marks each line's membership in a run that `opens` starts, ending at the
+    /// first line that cannot belong to it — a blank, or a table row. The one
+    /// shape in this design that a per-line predicate cannot express, and the only
+    /// state anywhere in the pipeline: a list item's continuations carry no marker
+    /// (§6.3), and neither do a `❯` prompt's (§5.2). Both are this fold.
+    ///
+    /// A table row closes a run because a blank does not always come first: the
+    /// CLI brackets its prompt in `───` rules with no blank line between, and
+    /// without this the closing rule and the status footer below it were quoted as
+    /// though the user had typed them (fixture 24).
     static func runMembership(_ lines: [String], openedBy opens: (String) -> Bool) -> [Bool] {
         var result: [Bool] = []
         var inside = false
         for line in lines {
-            if line.trimmed.isEmpty {
+            if line.trimmed.isEmpty || isTable(line) {
                 inside = false
             } else if opens(line) {
                 inside = true
