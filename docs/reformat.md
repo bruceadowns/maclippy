@@ -161,6 +161,7 @@ guardrail live in `Reformat+Predicates.swift`.
 | 2 | Normalize line endings, NBSP → space | CRLF/CR → LF |
 | 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> `, and recurses after a marker so `⏺ ▎` yields both (§5.2) |
 | 3b | Close a run of ≥ `minPadRun` interior spaces to one space | §6.1.1; terminal row padding standing in for a wrap, tables exempt |
+| 3c | Line-initial `•` or circled numeral → `- ` / `N. ` | a list marker, not punctuation — see below for why it is not stage 9 |
 | 4 | Strip trailing whitespace from every line | |
 | 5 | Estimate wrap width | §6.1; tables excluded |
 | 6 | Unwrap forced breaks | §6.2 |
@@ -180,6 +181,24 @@ interchangeable when it is not:
   (`⏺`) or ASCII (`⎿` → `|_`). Every sample in §8 depends on this.
 - **Stage 3 must precede 5.** Width estimation measures text, not gutters, and
   must not measure table rows.
+- **Stage 3c must precede 6.** Rewriting `①` to `1.` makes the line a list
+  start, which `startsListItem` reads and `terminalPunctuation` is relaxed by. Do
+  it at stage 9 and pass 1 decides joins on text without the marker while pass 2
+  decides them with it — an idempotency break, reproduced on a constructed case
+  before the move: a `①` item ending in a period keeps its wrapped tail on pass 1
+  and absorbs it on pass 2.
+
+  The cost is that `W` is measured on `1. text` rather than `① text`, one column
+  wider than the terminal saw. Every other stage-3 replacement is width-preserving
+  on purpose (§7), and this one cannot be — no two-character ASCII form of "item
+  one" carries its own separator. One character against a `breakTolerance` of 8 is
+  noise, and being *consistent across passes* is worth more than being right to
+  the column. Fixture 24's `W` is 237 either way, since its marker lines are
+  41–150 characters against a 237 column.
+
+  The inline case is different and stays at stage 9: a circled numeral mid-
+  sentence is a cross-reference, flattens to a bare digit, and is therefore
+  width-preserving. `the two additions in ④ and ⑤` reads worse as `in 4. and 5.`.
 - **Stage 3b sits between 3 and 5, and both sides matter.** It must precede 5
   because a padded line is an outlier — 356 characters where the column is 171
   (fixture 21) — and two of them are enough to form a cluster at the top of the
@@ -802,7 +821,9 @@ from their ASCII targets in source.
 | `≤` `≥` | U+2264, U+2265 | `<=` `>=` |
 | `×` | U+00D7 | `x` |
 | `·` | U+00B7 | `*` |
-| `•` at line start | U+2022 | `- ` |
+| `•` at line start | U+2022 | `- ` (stage 3c) |
+| `①`–`⑳`, `⓪` at line start | U+2460–U+2473, U+24EA | `1. `–`20. `, `0. ` (stage 3c) |
+| `①`–`⑳`, `⓪` inline | same | the bare digit — a cross-reference, not a marker |
 | `--` between whitespace | (ASCII) | `-` |
 
 **`--` is the one ASCII-to-ASCII entry**, and it is here for consistency rather
@@ -1019,7 +1040,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
 | 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
 | 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
-| 24 | A run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
+| 24 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8

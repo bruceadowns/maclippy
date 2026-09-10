@@ -75,7 +75,9 @@ enum Reformat {
 
         // Padding closes *after* stage 3, so its table exemption sees a marker-led
         // row (`⏺ │ a │ b │`) as the table it is.
-        var lines = substituteGutters(text.components(separatedBy: "\n")).map(closePadding)  // 3, 3b
+        var lines = substituteGutters(text.components(separatedBy: "\n"))                    // 3
+            .map(closePadding)                                              // 3b
+            .map(rewriteLeadingMarker)                                      // 3c
         lines = lines.map { $0.trimmedTrailing }                         // 4
 
         guard !isCode(lines) else { return input }   // verbatim (§6.1)
@@ -281,8 +283,14 @@ private extension Reformat {
 
     // MARK: - Stage 9 — flatten (§7)
 
+    /// A circled numeral surviving to here is inline — a cross-reference, not a
+    /// marker (stage 3c took those) — so it flattens to a bare digit, which is
+    /// also the only width-preserving choice. `in ④ and ⑤` reads worse as
+    /// `in 4. and 5.`.
     static func flattenPunctuation(_ line: String) -> String {
-        collapseDoubleDash(rewriteLeadingBullet(line.map { flatten[$0] ?? String($0) }.joined()))
+        collapseDoubleDash(line.map {
+            flatten[$0] ?? circledNumeral($0).map(String.init) ?? String($0)
+        }.joined())
     }
 
     /// `--` is the typewriter em dash, so it collapses to the same single hyphen
@@ -306,15 +314,6 @@ private extension Reformat {
             }
         }
         return out
-    }
-
-    static func rewriteLeadingBullet(_ s: String) -> String {
-        let indent = s.prefix { $0 == " " || $0 == "\t" }
-        let rest = s.dropFirst(indent.count)
-        guard rest.first == "\u{2022}" else { return s }
-        let body = rest.dropFirst().drop { $0 == " " || $0 == "\t" }
-        guard body.count < rest.count - 1 else { return s }   // require a separating space
-        return indent + "- " + body
     }
 
     // MARK: - Stages 10, 11
