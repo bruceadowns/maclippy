@@ -1,0 +1,53 @@
+Loren's framing is right, and the code says why in one line.
+
+HistoryUtils.checkGeography looks up the collection before it ever looks at the predicate:
+
+String geoField = GEO_FIELD_BY_COLLECTION.get(collectionName);
+if (geoField == null) {
+    return doc;            // untouched — the filter never runs
+}
+
+The predicate is evaluated on the next line, which those five collections never reach. So there is no per-predicate variation available to observe on them - all nine behave identically because none of them executes. "Negatives fail" is the symptom of an unreached branch, exactly as Loren put it.
+
+The split he's pointing at is that validation and application are keyed on different things: validation on the parameter name (fires for all 66 history facades), application on the collection name (only the mapped ones). That is why a service can 400 a bad region and still ignore a good one.
+
+His four filtering services are the mapped WKT collections - poi, sigact, weatherreport -> atext, groundimagery -> regionText. Three more filter and are probably not in the matrix: document, acled, cidne, all on a nested geoLocation document rather than a WKT string. Worth adding if the run is meant to be exhaustive, since they exercise a different read branch.
+
+This is AFDL-66733, already written up. Not a defect in 66683 or 66686.
+
+Two things worth confirming with QA before the matrix is trusted, because each produces the same "negatives fail" signature by a different mechanism:
+
+Which endpoint did the matrix hit? /history/count ignores the region on every service, poi included (AFDL-66743). If any negatives ran against count, poi would also show failures and the per-service split would look inconsistent.
+
+Which component-library version is deployed? Before AFDL-66686, equals_ matched zero records on history even on poi - positives fail, negatives pass, which reads as a per-predicate defect. If Loren's earlier per-predicate framing came from a poi/equals observation, a stale CL version explains it.
+
+Paste-ready for the ticket or the QA thread:
+
+> The defect is per-service, not per-predicate. analyticimagery, eventevolution, featureassessment, launchindicator and sarobservation are absent from HistoryUtils.GEO_FIELD_BY_COLLECTION, so checkGeography
+> returns every document untouched before any predicate is evaluated. All nine predicates are equally affected on those five; poi, sigact, weatherreport and groundimagery filter correctly on all nine.
+>
+> Positive cases on the five are vacuous passes - the record is returned because nothing was filtered, not because the predicate matched. The oracle has to be a record that should be excluded and is absent,
+> not a record that should be included and is present. A test asserting only a 200, or only the presence of the matching record, passes against the broken services.
+>
+> Tracked as AFDL-66733. Region validation is unaffected and works on all history endpoints (AFDL-66683) - a bad region still 400s on all five, which is why they look partly correct.
+>
+> Two separate mechanisms produce the same symptom and should not be folded into this one: /history/count ignores the region on every service including poi (AFDL-66743), and equals_ matched nothing on any
+> history endpoint before AFDL-66686 shipped.
+
+Cooked for 33s * done Thursday 4:18 PM
+
+> the latest CL version is deployed in UDEV
+
+Then the equals_ confounder is out, and per-service is the complete explanation for the five. Loren's matrix stands as written.
+
+Two follow-ons:
+
+Confirm the udl build separately. 66686 and 67404 are component-library; 66683 and 66691 are udl (466c108fd). The five-services finding doesn't depend on the udl side - it's CL's collection map - but the 400s Loren saw on those same five do. If UDEV's udl predates 466c108fd, the validation half of the matrix is testing the old GeographyUtils path even though the filtering half is current.
+
+Latest CL means AFDL-67404 is in, which constrains fixture-building. Writes now reject empty and out-of-bounds geometry with a 400, so QA cannot seed a negative-case record with POINT (200 10) or POLYGON EMPTY through POST /udl/<x>. Negative fixtures have to be in-bounds, valid geometry positioned outside the query polygon - which is the right shape for these tests anyway, since the question is whether the predicate excludes a non-matching record, not whether bad input is rejected.
+
+The open question is still which endpoint the matrix used. /history gives the clean four-filter / five-ignore split; /history/count would show poi failing negatives too, and that's AFDL-66743, not 66733.
+
+Baked for 17s * done Thursday 4:21 PM
+
+> the udl build version deployed in UDEV is the latest

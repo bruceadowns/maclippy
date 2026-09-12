@@ -167,7 +167,7 @@ guardrail live in `Reformat+Predicates.swift`.
 | 6 | Unwrap forced breaks | §6.2 |
 | 7 | Dedent by common leading whitespace | **after** unwrap — see below |
 | 8 | Convert box-drawing tables to Markdown | §5.1 |
-| 9 | Flatten punctuation | §7 flatten table |
+| 9 | Flatten punctuation | §7 flatten table; an embedded code block is exempt (§6.1) |
 | 10 | Collapse any run of blank lines to 1 | whitespace-only counts as blank |
 | 11 | Trim leading/trailing blank lines | output always ends with exactly one line feed |
 
@@ -525,9 +525,48 @@ Two honest limitations:
   threshold that separates them. Block-level gating would also lose a real join
   inside sample 1's `SCOPE` block.
 
-  So a paste mixing prose and code takes the majority verdict. **Code embedded
-  in a prose paste is not detected**, and no fixture demonstrates the case. It
-  stays open in §12 rather than being solved speculatively.
+  So a paste mixing prose and code takes the majority verdict, and the document
+  reads as prose. Fixture 25 is that paste, and it narrows the consequence rather
+  than removing it — see *Embedded code* below.
+
+### Embedded code
+
+Fixture 25 is prose wrapping a four-line Java method. The document mean sits well
+above 8, so the gate above correctly reads it as prose and the pipeline runs —
+through the method as well. Only one stage did damage: flattening turned the em
+dash in `// untouched — the filter never runs` into a hyphen, an edit to source.
+
+The other two stages that could have reached it did not, and not by luck. A join
+requires a line sitting at the wrap column, and a code line ends where its
+statement ends — the same fact the words-per-line measure rests on. Dedent removed
+the 2-space margin the *terminal* added, shared by every line in the paste; the
+`if`/`return`/`}` nesting the author wrote is untouched. Leaving code at its
+captured indent would preserve an artifact of the capture, not a property of the
+source.
+
+So the rule is narrow: **a code block inside a prose document is exempt from
+stage 9, and from nothing else.**
+
+```
+>= 2 consecutive non-blank lines, a majority ending in `;` `{` `}`
+```
+
+This is the `;{}` signal rejected just above, and the difference is what it has to
+do. As a gate it had to catch every language, and missing Swift and Python was
+fatal. As a supplement under a gate that already handles whole-document code, it
+only has to be **precise** — a language it misses costs exactly what the status
+quo costs, while a block it recognizes is one it will not mangle. Incompleteness
+is affordable here and was not there.
+
+Membership is computed immediately before stage 9 rather than with the other
+predicates: joins and table conversion both change the line count, so an index
+taken earlier is stale.
+
+**The threshold rests on one sample.** `minWordsPerLine` was calibrated against
+seven code files; the majority rule here has fixture 25 and the neutrality of the
+other twenty-four behind it, which is thinner. It is recorded as such rather than
+dressed up — the `⎿` width in fixture 12 started on the same footing and was
+corrected when a second sample arrived.
 
 Approaches tried and rejected, each defeated by real data rather than reasoning:
 `;` `{` `}` as unconditional terminators (fixes C-family only — Swift and Python
@@ -944,6 +983,7 @@ wrapping from authored prose that approximates a column.
 | 22 | One paragraph, wrapped exactly once | 2 | terminal | 233 | 233, 1 line (lone fallback) | 1 |
 | 23 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | terminal | 231 | 231, 1 line (lone fallback) | 1 |
 | 24 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks, a `❯` prompt bracketed by `─` rules with no blank line | 62 prose (+2 rules) | terminal | 237 | 230–237, 12 lines (7) | 4 |
+| 25 | Prose analysis wrapping a four-line Java method, two `❯` prompts, a `▎` block | 37 prose (+4 code) | terminal | 208 | 201–208, 13 lines (6) | 8 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1005,6 +1045,7 @@ argued about:
 | Padding run (21) | delete the stage | fixture 21 stops being idempotent — **load-bearing** |
 | Lone-candidate fallback (22) | drop it, or allow any 1-line cluster | without it a once-wrapped paragraph cannot be measured; allowing every lone cluster costs fixture 1 its joins — **load-bearing, and adds no constant** |
 | Wrapped cells (23) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
+| Code block exemption (25) | delete it | the em dash in fixture 25's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
 All three survive, but the audit did find one redundancy: fixture 16's lowering
 of the cluster minimum to 2 was subsumed by the fallback, so it went back to 3
@@ -1041,6 +1082,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
 | 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
 | 24 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
+| 25 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -1139,14 +1181,23 @@ fires on any sample.
   other rewrites text. §5's ordering note — least to most invasive — is what
   carries that distinction instead. Behavior does not depend on the label; it
   appears only in `ClipMenu` and SPEC §5.
-- **Code embedded in a prose paste** is not detected (§6.1). Whole-document code
-  is. No fixture exhibits the mixed case; a paste that does is what a rule should
-  be calibrated against.
+- **Embedded code is protected from flattening only** (§6.1, fixture 25). Joins
+  and dedent were measured not to harm it; every other stage is unexamined against
+  a code block, because one sample is all the corpus has. A second mixed paste is
+  what would either widen the exemption or confirm its edge.
+- **An embedded code block does not render as code.** Fixture 25's method comes
+  out at column 0 under a blank line, so a Markdown renderer collapses its four
+  lines into one paragraph — worse than the em dash that prompted the rule, and
+  untouched by it. Fixing it means emitting a fence, which is the item below.
 - **Fenced code has no special handling.** An earlier draft specified a `fence`
   predicate passing ` ``` ` regions through byte-identical. It was never built
   and no fixture contains a fence, so it was cut rather than shipped
   uncalibrated. A mostly-code paste already trips the §6.1 guardrail, and a short
   fence inside prose is short enough that the forced-break test declines it.
+  Fixture 25 raises the stakes: a fence around a detected block is the only thing
+  that makes it survive rendering, and §6.1 now detects one. That is a markup
+  invention on the scale of §5.2's `❯`, on one sample's evidence — which is why it
+  is still here and not in §4.
 - **ASCII art skews by a few columns** when it contains expanding glyphs (§7).
   Accepted; a fix means a new block kind and a detector with no supporting data.
 - **Character count is not display width** (§6.1). Wide characters — CJK, most

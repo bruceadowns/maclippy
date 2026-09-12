@@ -34,6 +34,9 @@ enum Reformat {
     static let minPadRun = 32
     /// Below this, the text is code rather than wrapped prose (§6.1).
     static let minWordsPerLine = 8.0
+    /// One line ending in a brace is a prose sentence far more often than it is
+    /// code; two is already a block.
+    static let minCodeBlockLines = 2
 
     // MARK: - Tables (§7)
 
@@ -87,7 +90,10 @@ enum Reformat {
         lines = performJoins(lines, at: Set(joins))
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
-        lines = lines.map(flattenPunctuation)                           // 9
+        // Membership is computed here, not earlier: joins and table conversion
+        // both change the line count, so any index taken before them is stale.
+        let code = codeBlockMembership(lines)
+        lines = lines.indices.map { code[$0] ? lines[$0] : flattenPunctuation(lines[$0]) }  // 9
         let body = trimBlanks(collapseBlankRuns(lines)).joined(separator: "\n")  // 10, 11
 
         // Output always terminates with a line feed, whether or not the input
