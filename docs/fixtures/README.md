@@ -44,14 +44,15 @@ columns from 93 to 232, authored prose that only approximates a column,
 box-drawing tables, quote-bar gutters, ALL-CAPS and label-style headers, nested
 and flush-continued lists, emoji in table cells, a first line that lost its
 indent to the selection, a response marker stacked on top of a quote gutter, and
-a wrap that arrived as 183 interior spaces instead of a newline, and a
-paragraph wrapped exactly once, and a table whose cells wrap across three
-physical rows and sit vertically centered, and a prompt bracketed by rules with
-no blank line to end it.
+a wrap that arrived as 183 interior spaces instead of a newline, a
+paragraph wrapped exactly once, a table whose cells wrap across three physical
+rows and sit vertically centered, a prompt bracketed by rules with no blank line
+to end it, and a Java method embedded in prose.
 
-There are no code fixtures. Reformat leaves code byte-identical (§6.1), so a
-fixture pair would be a file diffed against itself — the calibration that
-established the guardrail lives in the spec, not on disk.
+There is no *whole-document* code fixture. Reformat leaves such a paste
+byte-identical (§6.1), so the pair would be a file diffed against itself — the
+calibration that established the guardrail lives in the spec, not on disk. Code
+embedded in prose is a different case and fixture 25 covers it.
 
 ## Adding one
 
@@ -60,3 +61,10 @@ any synthetic case. Save it as the next `.in.txt`, write the `.out.txt` by hand,
 and the rule change follows from the pair. Every rule in the spec was derived
 this way; several were removed the same way once a fixture proved they never
 decided anything.
+
+**A sample has to advance Reformat to become a fixture.** Run it first: if it
+comes out clean and idempotent under the rules as they stand, it moved nothing,
+and it belongs in the scratch pile rather than on disk. Coverage is not the
+argument for a pair — a rule it forced, or a rule it pins against regression, is.
+Samples 5, 10 and 14 predate this bar and §8 records them as moving no rule; they
+are history, not precedent.
