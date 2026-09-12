@@ -150,19 +150,24 @@ and its absence from terminal output is why any of this is heuristic.
 ## 4. Pipeline
 
 An ordered list of stages. The array **is** the specification; it is declared
-once in `Reformat` (`Maclippy/Support/Reformat.swift`) and mirrored here.
+once as `Reformat.apply` (`Maclippy/Support/Reformat.swift`) and mirrored here.
+Two stages are large enough to own a file — stage 3 in `Reformat+Gutters.swift`
+and stage 8 in `Reformat+Tables.swift` — and the predicates plus the code
+guardrail live in `Reformat+Predicates.swift`.
 
 | # | Stage | Notes |
 |---|---|---|
 | 1 | Strip ANSI/OSC escapes, zero-width characters | `\u{1B}[…m`, `\u{200B}` |
 | 2 | Normalize line endings, NBSP → space | CRLF/CR → LF |
-| 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> ` (§5.2) |
+| 3 | Marker → fixed-width replacement | §7 marker table; also normalizes quote gutters to `> `, and recurses after a marker so `⏺ ▎` yields both (§5.2) |
+| 3b | Close a run of ≥ `minPadRun` interior spaces to one space | §6.1.1; terminal row padding standing in for a wrap, tables exempt |
+| 3c | Line-initial `•` or circled numeral → `- ` / `N. ` | a list marker, not punctuation — see below for why it is not stage 9 |
 | 4 | Strip trailing whitespace from every line | |
 | 5 | Estimate wrap width | §6.1; tables excluded |
 | 6 | Unwrap forced breaks | §6.2 |
 | 7 | Dedent by common leading whitespace | **after** unwrap — see below |
 | 8 | Convert box-drawing tables to Markdown | §5.1 |
-| 9 | Flatten punctuation | §7 flatten table |
+| 9 | Flatten punctuation | §7 flatten table; an embedded code block is exempt (§6.1) |
 | 10 | Collapse any run of blank lines to 1 | whitespace-only counts as blank |
 | 11 | Trim leading/trailing blank lines | output always ends with exactly one line feed |
 
@@ -176,6 +181,31 @@ interchangeable when it is not:
   (`⏺`) or ASCII (`⎿` → `|_`). Every sample in §8 depends on this.
 - **Stage 3 must precede 5.** Width estimation measures text, not gutters, and
   must not measure table rows.
+- **Stage 3c must precede 6.** Rewriting `①` to `1.` makes the line a list
+  start, which `startsListItem` reads and `terminalPunctuation` is relaxed by. Do
+  it at stage 9 and pass 1 decides joins on text without the marker while pass 2
+  decides them with it — an idempotency break, reproduced on a constructed case
+  before the move: a `①` item ending in a period keeps its wrapped tail on pass 1
+  and absorbs it on pass 2.
+
+  The cost is that `W` is measured on `1. text` rather than `① text`, one column
+  wider than the terminal saw. Every other stage-3 replacement is width-preserving
+  on purpose (§7), and this one cannot be — no two-character ASCII form of "item
+  one" carries its own separator. One character against a `breakTolerance` of 8 is
+  noise, and being *consistent across passes* is worth more than being right to
+  the column. Fixture 24's `W` is 237 either way, since its marker lines are
+  41–150 characters against a 237 column.
+
+  The inline case is different and stays at stage 9: a circled numeral mid-
+  sentence is a cross-reference, flattens to a bare digit, and is therefore
+  width-preserving. `the two additions in ④ and ⑤` reads worse as `in 4. and 5.`.
+- **Stage 3b sits between 3 and 5, and both sides matter.** It must precede 5
+  because a padded line is an outlier — 356 characters where the column is 171
+  (fixture 21) — and two of them are enough to form a cluster at the top of the
+  distribution and be taken for the wrap column. It must *follow* 3 because its
+  table exemption reads the line: run earlier, a marker-led row (`⏺ │ a │ b │`)
+  is not yet a table, and its cell padding collapses while its unmarked siblings
+  keep theirs. No fixture carries that shape; it was found by inspection.
 - **Stage 4 must precede 6.** Width estimation and the forced-break arithmetic
   both measure line length, and trailing spaces would inflate it.
 
@@ -207,13 +237,20 @@ One golden fixture (§9) exists solely to fail if this order changes.
 ## 5. Line predicates
 
 There is no segmentation pass and no block objects. Line kind is decided by five
-independent predicates, each a pure function of one line (or, for `inList`, a
-single forward scan). The unwrapper consults them at each candidate join.
+independent predicates, each a pure function of one line. The unwrapper consults
+them at each candidate join.
+
+`inList` is the exception and the pipeline's **only** state: membership in a run
+that a predicate opens and the first line unable to belong to it closes — a
+blank, or a table row. One fold expresses it, and two callers share it — list
+continuations here, and a `❯` prompt's continuations in §5.2, which have the same
+shape for the same reason (the opening line carries the marker and the rest carry
+nothing).
 
 | Predicate | True when | Effect on a join |
 |---|---|---|
 | `isTable` | trimmed line starts with `│┌├└┬┴┼─╭╰┏┗┣` or `\|` **and** ends with the mirror set | never joins, either side (§5.1) |
-| `isQuote` | line opens with `▎`, `┃` or `>` | never joins, either side (§5.2) |
+| `isQuote` | line opens with `>` — stage 3 has already normalized `▎`, `┃` and `❯` to it | never joins, either side (§5.2) |
 | `isHeader` | ALL-CAPS after stripping a trailing parenthetical, **and** not ending in `.?!` | never joins, either side |
 | `isListStart` | line begins `- `, `* `, `+ `, `N. `, `N) ` | never joined *into* |
 | `inList` | line is a list item, or follows one without an intervening blank | relaxes `terminalPunctuation` (§6.3) |
@@ -285,29 +322,86 @@ destination.
 Verified against sample 3: the 11-row block becomes a 6-line Markdown table,
 cells intact.
 
-**Known limitation:** a cell whose content wraps across several physical lines is
-not reassembled — each `│`-delimited line becomes one row. Distinguishing "new
-row" from "continuation of the row above" requires a convention the source does
-not always carry, and no sample in the corpus (§8) exercises it. Sample 3
-separates every row with `├──┼──┤`, which is unambiguous.
+7. **Wrapped cells are reassembled.** A cell too wide for its column continues
+   on the next physical line, so a rule-delimited segment holding several lines
+   is *one* logical row: each column's fragments join with a space, empties
+   dropped. Fixture 23 centers its cells vertically — the file name sits on the
+   middle line of three — so position within the segment carries no meaning and
+   only the column does.
+
+   This is licensed by the table's own convention, not guessed. Every box table
+   in the corpus rules between every row (fixture 3: 5 data rows and 4 interior
+   rules; 10: 10 and 9; 14: 5 and 4; 20: 6 and 5), and fixture 23's 5 physical
+   data rows against 2 interior rules is what marks the extras as continuations.
+
+   **The test is two interior rules, not one.** A rule with a data row on each
+   side proves the table separates *data* from data. A single interior rule
+   proves nothing — it is the header separator, and Reformat's own Markdown
+   output has exactly one, so reading it as a row boundary would fold that whole
+   table into one row on a second pass. With one rule the physical rows are
+   emitted as they stand, which is the old conservative behavior.
 
 ### 5.2 Quote blocks
 
-A line opening with `▎`, `┃` or `>` is a quote line. The gutter is normalized to
-`> ` and **the content is not unwrapped** — quote lines are excluded from the
-words-per-line measurement and from every join.
+A line opening with `▎`, `┃`, `❯` or `>` is a quote line. The gutter is normalized
+to `> ` and **the content is not unwrapped** — quote lines are excluded from
+every join.
 
-They are **not** excluded from width estimation, and the distinction matters. A
-quote line was wrapped by the same terminal at the same column as the prose
-around it, so it is first-rate evidence of `W` even though we decline to unwrap
-it. An earlier draft excluded them from measurement too, which cost fixture 11
-all five of its joins: strip the quote lines out of a quote-heavy paste and no
-cluster reaches three members, so no column can be established at all.
+They are **not** excluded from either measurement, and the distinction matters: a
+quote line is still prose, wrapped by the same terminal at the same column as
+everything around it.
+
+- **Width estimation.** Excluding them cost fixture 11 all five of its joins —
+  strip the quote lines out of a quote-heavy paste and no cluster survives, so no
+  column can be established at all.
+- **The code guardrail (§6.1).** Excluding them made fixture 19 read as code. It
+  is a `Draft reply:` label above four quoted lines, so the only measurable line
+  was two words long; the guardrail called the paste code and returned it
+  verbatim, gutters and em dashes intact.
+
+Both were the same mistake made twice: treating *not unwrapped* as *not
+evidence*. A quote is exempt from being **joined**, not from being **counted**.
 
 `▎` is the CLI's rendering of a Markdown blockquote, so emitting `> ` restores
 the source markup rather than inventing it — the same argument §5.1 makes for
 tables. Recognizing `>` on input as well as output is what keeps the stage
 idempotent, and it handles email-style quoting for free.
+
+**`❯` is the exception to that argument.** It is a shell prompt, not a rendered
+blockquote, so mapping it to `> ` genuinely does invent markup. It earns its place
+structurally instead: a prompt is a discrete utterance that must never merge into
+the prose around it, and quote lines are the only kind the unwrapper refuses to
+touch. Emitting the prompt as a quote is also the right shape for the
+destination — a pasted transcript reads as alternating speech.
+
+**A wrapped prompt keeps its continuations.** A `▎` block marks every one of its
+own lines, so its extent is explicit. A `❯` prompt marks only the first — the
+terminal wrapped the rest with no gutter — and the resulting shape is *identical*
+to `⏺` followed by continuation lines, which must **not** be quoted because that
+is body prose. Same geometry, opposite meaning, told apart only by which glyph
+opened the run.
+
+So the prompt's extent is inferred positionally: it runs to the next blank line
+**or table row**, and every unguttered line in that run is quoted too. Fixture 20
+is the case — without it, one typed utterance came out as a quoted first line
+followed by its own tail joined as ordinary prose.
+
+An earlier draft ended the run at a blank alone, on the claim that a real
+transcript always puts one between a prompt and what follows. That is false, and
+fixture 24 is the counter-example: the CLI brackets its prompt in `─` rules with
+no blank anywhere near it, so the closing rule and the status footer beneath it
+were both quoted as though the user had typed them. A table row cannot be a
+prompt continuation, so it closes the run.
+
+**A marker and a gutter can open the same line**, and the substitution has to
+consume both. `⏺ ▎ text` is one line of quoted assistant output: replacing only
+the leading `⏺` leaves the `▎` sitting in the text, where it fails the §9
+no-marker-survives invariant, keeps the line out of `isQuote` while its
+continuations are in, and — because a second pass sees the `▎` at the front and
+converts it — **breaks idempotency**. So a *marker* replacement recurses on what
+follows it. A *quote gutter* does not: `> > x` is a nested blockquote, and
+recursing would silently drop a level. Fixture 18 is the case; it changes no other
+fixture.
 
 **Not unwrapping is what makes this cheap.** An earlier design substituted the
 gutter and let the unwrapper run, which welded the marker into the middle of
@@ -352,9 +446,21 @@ corpus spans 93 to 232 (§8), so no constant is possible.
    `wcwidth` table: real complexity for a case no fixture exhibits.
 2. Sort descending, group where the gap between adjacent distinct values is
    ≤ **8**.
-3. Walk groups **highest first** and take the first that holds at least 2 lines
+3. Walk groups **highest first** and take the first that holds at least 3 lines
    *and* survives the exceed check below — not the group with the most lines.
-4. `W` = that group's maximum.
+4. `W` = that group's maximum. If no group holds 2 lines, fall back to the
+   **highest** group that passed the exceed check, however few lines it has. A
+   paragraph wrapped *N* times leaves only *N-1* lines at the column, so a
+   paragraph wrapped exactly once can never form a group — and that is the most
+   ordinary paste there is (fixture 22). The fallback applies only when nothing
+   populated exists anywhere below, which is what separates a one-wrap paragraph
+   from a stray long line sitting above a real column: in fixture 1 a lone
+   120-character line loses to the 31-line column at 95, as it must.
+
+   What keeps this safe is `terminalPunctuation` (§6.3). The fallback's exposure
+   is a long line followed by a short one, and when the long line ends a sentence
+   the join is already declined — so the shape it can act on is a line that
+   breaks mid-sentence, which is a wrap by definition.
 5. **Reject the estimate entirely** — skip unwrapping — if either check fails:
    - more than **25%** of measurable lines exceed `W`. A greedy wrapper never
      emits a line longer than its column, so a document where many lines do was
@@ -419,9 +525,48 @@ Two honest limitations:
   threshold that separates them. Block-level gating would also lose a real join
   inside sample 1's `SCOPE` block.
 
-  So a paste mixing prose and code takes the majority verdict. **Code embedded
-  in a prose paste is not detected**, and no fixture demonstrates the case. It
-  stays open in §12 rather than being solved speculatively.
+  So a paste mixing prose and code takes the majority verdict, and the document
+  reads as prose. Fixture 25 is that paste, and it narrows the consequence rather
+  than removing it — see *Embedded code* below.
+
+### Embedded code
+
+Fixture 25 is prose wrapping a four-line Java method. The document mean sits well
+above 8, so the gate above correctly reads it as prose and the pipeline runs —
+through the method as well. Only one stage did damage: flattening turned the em
+dash in `// untouched — the filter never runs` into a hyphen, an edit to source.
+
+The other two stages that could have reached it did not, and not by luck. A join
+requires a line sitting at the wrap column, and a code line ends where its
+statement ends — the same fact the words-per-line measure rests on. Dedent removed
+the 2-space margin the *terminal* added, shared by every line in the paste; the
+`if`/`return`/`}` nesting the author wrote is untouched. Leaving code at its
+captured indent would preserve an artifact of the capture, not a property of the
+source.
+
+So the rule is narrow: **a code block inside a prose document is exempt from
+stage 9, and from nothing else.**
+
+```
+>= 2 consecutive non-blank lines, a majority ending in `;` `{` `}`
+```
+
+This is the `;{}` signal rejected just above, and the difference is what it has to
+do. As a gate it had to catch every language, and missing Swift and Python was
+fatal. As a supplement under a gate that already handles whole-document code, it
+only has to be **precise** — a language it misses costs exactly what the status
+quo costs, while a block it recognizes is one it will not mangle. Incompleteness
+is affordable here and was not there.
+
+Membership is computed immediately before stage 9 rather than with the other
+predicates: joins and table conversion both change the line count, so an index
+taken earlier is stale.
+
+**The threshold rests on one sample.** `minWordsPerLine` was calibrated against
+seven code files; the majority rule here has fixture 25 and the neutrality of the
+other twenty-four behind it, which is thinner. It is recorded as such rather than
+dressed up — the `⎿` width in fixture 12 started on the same footing and was
+corrected when a second sample arrived.
 
 Approaches tried and rejected, each defeated by real data rather than reasoning:
 `;` `{` `}` as unconditional terminators (fixes C-family only — Swift and Python
@@ -470,6 +615,54 @@ they are all wrapper output. Centring `W` in the band rejects the upper half of
 its own cluster and needs a slack constant to claw them back. The maximum needs
 none.
 
+### 6.1.1 When the wrap arrives as padding
+
+A terminal pads a row out to its own width. Usually that padding is trailing, and
+stage 4 drops it — fixtures 11 and 18 each carry a line padded with 191 and 148
+spaces and neither needed a rule. Fixture 21 is the same artifact with the next
+row's first word appended to the same buffer line:
+
+```
+Lead with the lease benefits — … benefits are cheap: you're[183 spaces]not
+```
+
+170 characters of text, the padding, then `not`. **Content after the padding is
+what says the row continued**; padding at the end of a line says it ended. So the
+run is a line break written as spaces, and closing it to the single space a wrap
+join uses is the whole rule.
+
+It is *not* routed through §6.2 by splitting the line at the run. That reads well
+— hand the break to the rule that already decides breaks — but `forcedBreaks`
+measures pre-join lengths, so the 3-character tail `not` looks like a line no
+wrapper was ever forced to break. The join stops there on pass 1 and happens on
+pass 2, which is an idempotency violation.
+
+Table rows are exempt: cells pad to align, and fixtures 3, 10 and 14 lose their
+tables without the exemption.
+
+**Why a threshold at all**, rather than collapsing every run of two or more? Prose
+has no use for a second space, so the simpler rule is tempting — and it was tried.
+It destroys fixture 15, whose side-by-side ASCII diff carries its two columns on
+one line (`pass 1:  | … |      pass 2:  | … |`) and does not match `isTable`,
+which wants a box glyph at both ends. Collapsing runs the columns together, which
+is the one thing this feature must never do.
+
+Nor can tuning save both: fixture 15's alignment runs reach **11** spaces and
+fixture 21's `file:line` listing uses 10 and 11. The two are indistinguishable by
+run length, so any threshold that spares the diff also spares the listing. The
+listing keeping alignment it does not need is the cheaper error.
+
+Interior runs across the corpus are 2–11 (alignment) and 183 (padding), so 32
+sits between them with room on both sides. It is absolute rather than a fraction
+of `W`, for the same reason as `maxAbsorbableToken`: `W` grows once lines are
+joined, so a `W`-relative bound stops holding on a second pass.
+
+Trailing runs are a separate population and need no rule — fixture 18 carries 148
+and fixture 20 carries 26, both dropped by stage 4.
+
+The stage runs after marker substitution so that its table exemption sees a
+marker-led row as the table it is (§4).
+
 ### 6.2 The forced-break test
 
 Join line *N* with *N+1* when
@@ -495,8 +688,13 @@ characters, and the longest legitimately joined one is 77 against the path's
 An earlier draft also required `len(N) ≤ W`. It was removed as redundant: every
 case it caught (sample 1's `RELATED TICKETS` entries) is already caught by
 `terminalPunctuation`. Its presence had also forced a workaround: a cluster-size
-fallback in §6.1 existed purely because the ceiling blocked sample 8's only join.
-Removing the ceiling removed the need for the fallback too.
+fallback in §6.1 existed purely because the ceiling blocked sample 8's only join,
+and removing the ceiling removed that need.
+
+The fallback is back, for an unrelated reason — a paragraph wrapped once cannot
+form a cluster at all (§6.1 step 4, fixture 22). Worth recording as a caution
+about ablation: "removing it changes no output" proves the corpus lacks the case,
+not that the rule is unnecessary.
 
 The tolerance exists because not all input comes from a fixed-column wrapper,
 and the corpus shows the two regimes plainly in their cluster spreads (§8):
@@ -632,7 +830,7 @@ the middle of a sentence — `…consults the geography fields ▎ in order and 
 | `⏺` | 2 | two spaces | yes — every sample carrying a marker |
 | `⎿` | 3 | `|_` + space | yes — sample 12 |
 | `●` | 2 | two spaces | no |
-| `✻` `✽` `✶` | 2 | two spaces | `✶` seen in fixture-16 shape; the others no |
+| `✻` `✽` `✶` | 2 | two spaces | `✻` — fixture 18; `✶` seen in fixture-16 shape; `✽` no |
 
 **Why `⎿` becomes visible and `⏺` does not.** `⏺` marks "the assistant said
 this" — chrome that carries no meaning once the text leaves the terminal, so it
@@ -662,7 +860,9 @@ from their ASCII targets in source.
 | `≤` `≥` | U+2264, U+2265 | `<=` `>=` |
 | `×` | U+00D7 | `x` |
 | `·` | U+00B7 | `*` |
-| `•` at line start | U+2022 | `- ` |
+| `•` at line start | U+2022 | `- ` (stage 3c) |
+| `①`–`⑳`, `⓪` at line start | U+2460–U+2473, U+24EA | `1. `–`20. `, `0. ` (stage 3c) |
+| `①`–`⑳`, `⓪` inline | same | the bare digit — a cross-reference, not a marker |
 | `--` between whitespace | (ASCII) | `-` |
 
 **`--` is the one ASCII-to-ASCII entry**, and it is here for consistency rather
@@ -752,7 +952,8 @@ sample are `§` (5 occurrences, samples 2 and 3) and the 📝 / ✨ emoji in sam
 
 ## 8. Calibration corpus
 
-Fifteen real pastes, measured at stage 5 — markers substituted, tables masked,
+Every fixture in [`docs/fixtures/`](fixtures/) is a real paste, and every one is
+in the table below, measured at stage 5 — markers substituted, tables masked,
 **not yet dedented** (dedent is stage 7). "Regime" distinguishes true terminal
 wrapping from authored prose that approximates a column.
 
@@ -765,29 +966,51 @@ wrapping from authored prose that approximates a column.
 | 5 | Risks + acceptance criteria; header abutting a list | 21 | authored | 95 | 70–95, 16 lines (25) | 7 |
 | 6 | Status summary; column-0 hard wraps | 9 | terminal | 187 | 181–187, 3 lines (6) | 3 |
 | 7 | Ticket draft; label headers, `---` rule, long paragraphs | 26 | terminal | 232 | 216–232, 10 lines (16) | 10 |
-| 8 | Four bullets, one wrapped | 5 | terminal | **223** (max fallback) | 173–181, 2 lines (8) | 1 |
+| 8 | Four bullets, one wrapped | 5 | terminal | 223 (lone fallback) | 173–181, 2 lines (8) | 1 |
 | 9 | Ticket draft; first line missing its indent | 29 | terminal | 232 | 224–232, 8 lines (8) | 10 |
 | 10 | Summary + 21-row, 3-column box table with emoji cells | 9 prose (+21 table) | terminal | 165 | 160–165, 3 lines (5) | 3 |
 | 11 | Push summary + `▎` quote-bar blocks | 17 | terminal | 232 | 219–232, 8 lines (13) | 5 |
-| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | — | rejected | 0 |
+| 12 | Transcript with `⎿` tool output, `Bash(…)` invocation, status line | 14 | mixed | 204 | no join survives the guards | 0 |
 | 13 | Prose interleaved with indented examples and a `>` quote block | 16 | terminal | 202 | 201–202, 3 lines (1) | 3 |
 | 14 | Prose + 11-row box table with `✓`/`✗` cells and a blank header cell | 10 prose (+11 table) | terminal | 202 | 198–202, 3 lines (4) | 4 |
-| 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 202 | 199–202, 3 lines (3) | 3 |
+| 15 | Prose + a side-by-side ASCII diff whose lines open and close with a pipe | 12 | terminal | 204 | 199–204, 3 lines (5) | 3 |
 | 16 | Bullet summary where only two lines reached the column | 10 | terminal | 242 | 241–242, 2 lines (1) | 2 |
-| 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | — | — | 0 |
+| 17 | Already-reformatted transcript: `>` prompts, 250-char rules, `é` | 18 | — | 420 (lone fallback) | every long line is a quote or a rule | 0 |
+| 18 | Quote-bar draft; a `⏺ ▎` marker+gutter line, `❯` prompt, `✻` status line | 18 | terminal | 165 | 157–165, 7 lines (8) | 0 |
+| 19 | `Draft reply:` label above a four-line quote block, almost no unquoted prose | 5 | terminal | 170 | every long line is a quote | 0 |
+| 20 | 4-column box table, status marker, and a `❯` prompt wrapped over three lines | 19 prose (+13 table) | terminal | 232 | 227–232, 6 lines (5) | 5 |
+| 21 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | terminal | 174 | 162–174, 10 lines (12) | 10 |
+| 22 | One paragraph, wrapped exactly once | 2 | terminal | 233 | 233, 1 line (lone fallback) | 1 |
+| 23 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | terminal | 231 | 231, 1 line (lone fallback) | 1 |
+| 24 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks, a `❯` prompt bracketed by `─` rules with no blank line | 62 prose (+2 rules) | terminal | 237 | 230–237, 12 lines (7) | 4 |
+| 25 | Prose analysis wrapping a four-line Java method, two `❯` prompts, a `▎` block | 37 prose (+4 code) | terminal | 208 | 201–208, 13 lines (6) | 8 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
 That is the shift-invariance argument of §4, confirmed empirically rather than
 only proved.
 
-**Zero false joins across the corpus.** Two known misses, both conservative:
-fixture 8 (no cluster reaches 3 lines) and fixture 12 (tool output dominates the
-length distribution, so no column can be established).
+**Zero false joins across the corpus.** One known miss, conservative: fixture 12,
+where tool output dominates the length distribution and every candidate join is
+declined by a guard.
+
+**The `W` column is measured, not asserted** — it is what `estimateWidth` returns
+at stage 5, re-measured whenever the estimator changes. Rows 12, 15, 17 and 19
+had drifted and are corrected. Row 8's `223` is *not* drift, though it was
+briefly mistaken for it: it is what the estimator returns with the cluster
+minimum at 3, which is the value in force. `W` is a function of the
+configuration, so re-measure the column rather than reasoning about it.
+
+**Fixture 18's zero joins are not a miss.** Its width estimate is correct and
+every long line is a quote line, which §5.2 declines to unwrap; the four
+non-quote lines are short and blank-separated, so there is nothing left to join.
+A paste whose substance sits entirely inside a `▎` block reformats to a `>` block
+and otherwise stands still — which is the specified behavior, and worth having a
+fixture pin down before someone reads it as a bug.
 
 ### Is this over-fitted?
 
-A fair question with fifteen fixtures and roughly a dozen rules. The check is
+A fair question — the corpus is not much larger than the rule set. The check is
 **ablation**: delete each rule, re-run the whole corpus, and see whether anything
 changes. Re-run after fixture 15, every rule but one alters at least one
 fixture's output, breaks idempotency, or lets code through — the table above
@@ -796,9 +1019,12 @@ records which. The one that did not, `W < 40`, was removed.
 That is the strongest evidence available that the rules are load-bearing rather
 than accumulated. It is not proof. Two things are worth watching:
 
-- **Five tunable thresholds** — cluster gap 8, minimum cluster 3, forced-break
-  tolerance 8, 25% exceed, 8 words per line. Each is calibrated, none is
-  arbitrary, but five is enough that a sixth should be resisted hard.
+- **Seven tunable thresholds** — cluster gap 8, minimum cluster 3, forced-break
+  tolerance 8, absorbable token 100, 25% exceed, 8 words per line, padding run
+  32. An earlier count here said six and omitted the token cap, which is the
+  wrong direction for a number whose whole purpose is to be watched. Each is
+  calibrated and none is arbitrary, but seven is past the point where the next
+  one gets refused rather than debated.
 - **Two compound guards.** `terminalPunctuation` carries two exemptions and
   `header` three conditions. Both are the fuzziest things here, and both earn
   their place on separate fixtures — but a third exemption on either would be a
@@ -809,6 +1035,23 @@ existing rules, or expose a *bug* in one. Fixtures 5, 10 and 14 moved nothing;
 13 revealed a flaw in the estimator. That is the healthy pattern. If three
 consecutive samples each require a *new* rule, the design is over-fitting and the
 right response is to simplify, not to keep adding.
+
+**That rule fired at fixture 23**, and this is what the audit found. Fixtures 21,
+22 and 23 each added a rule, so all three were tested for removal rather than
+argued about:
+
+| Rule | Test | Verdict |
+|---|---|---|
+| Padding run (21) | delete the stage | fixture 21 stops being idempotent — **load-bearing** |
+| Lone-candidate fallback (22) | drop it, or allow any 1-line cluster | without it a once-wrapped paragraph cannot be measured; allowing every lone cluster costs fixture 1 its joins — **load-bearing, and adds no constant** |
+| Wrapped cells (23) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
+| Code block exemption (25) | delete it | the em dash in fixture 25's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
+
+All three survive, but the audit did find one redundancy: fixture 16's lowering
+of the cluster minimum to 2 was subsumed by the fallback, so it went back to 3
+with the whole corpus still passing. Two of the three additions cost no new
+constant, and the one that did (padding) is the one to remove first if a later
+sample shows a cheaper way to reach the same output.
 
 Each sample forced a rule that no amount of reasoning had produced:
 
@@ -824,14 +1067,22 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 8 | A cluster under 3 lines is coincidence, not evidence — fall back to the longest line |
 | 9 | The `terminalPunctuation` wrap-column exemption; dedent must ignore a lone-minimum indent |
 | 10 | Nothing — 3-column tables and emoji cells pass through unchanged |
-| — | **Simplification pass:** ablation removed `hardBreak`, `indentMismatch`, the `len(N) ≤ W` ceiling and the cluster-size fallback with zero behavioral change |
+| — | **Simplification pass:** ablation removed `hardBreak`, `indentMismatch`, the `len(N) ≤ W` ceiling and the cluster-size fallback with zero behavioral change (the fallback came back at fixture 22, on evidence the corpus did not then contain) |
 | 11 | `▎` quote-bar gutters — one marker-table row, no new rule |
 | 12 | Calibrated `⎿` at width 3 (was speculative); generalized the marker table from widths to fixed-width replacement strings |
 | 13 | **Highest cluster, not most populous** — the estimator was picking short-line clusters in any document with headers and examples |
 | 14 | Nothing — empty header cells, `✓`/`✗` in cells, and a row with 110 trailing spaces all pass through unchanged |
 | 15 | A table block must contain a **rule row** — a lone pipe-delimited line is ASCII art, and converting it invented header and delimiter rows |
-| 16 | Cluster minimum of 2, tested highest-first; the token cap must be absolute, not `W`-relative |
+| 16 | Tested highest-first; the token cap must be absolute, not `W`-relative. It also forced the cluster minimum down to 2, which was **put back to 3** at fixture 22 once the lone-candidate fallback covered this case — one rule replacing a calibration tweak |
 | 17 | Dedent must ignore quote lines and table rules when computing the margin |
+| 18 | Marker substitution must **recurse** into a gutter behind it (`⏺ ▎`), or the `▎` survives and a second pass converts it |
+| 19 | Quote lines must count toward the code guardrail, not just the width estimate |
+| 20 | A wrapped prompt's continuation lines must inherit its quote gutter |
+| 21 | A long run of interior spaces is a wrap the terminal wrote as padding (§6.1.1) — left alone it is both an outlier that hijacks `W` and a canyon in the output |
+| 22 | The cluster minimum needs a lone-candidate fallback: a paragraph wrapped once leaves one line at the column, so the most ordinary paste of all could not be measured. Reinstates a rule ablation had removed as inert |
+| 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
+| 24 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
+| 25 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8
@@ -850,7 +1101,7 @@ the terminator set, is now caught by that guard alone.
 ## 9. Fixtures
 
 No test target — this is a small app and the feedback loop is running it. What
-exists instead is [`docs/fixtures/`](fixtures/): fifteen real pastes with their
+exists instead is [`docs/fixtures/`](fixtures/): real pastes with their
 expected output, and **`make check`**, a script that runs `Reformat` over all of
 them and prints what differs.
 
@@ -858,7 +1109,7 @@ them and prints what differs.
 $ make check
 ok       01-handoff-brief  (11 lines joined away)
 ...
-15 fixtures pass, all idempotent
+<n> fixtures pass, all idempotent
 ```
 
 It reports the join count per fixture, not just pass/fail. That matters: when
@@ -876,7 +1127,7 @@ The invariants worth checking by hand, should something look wrong:
 
 | Property | Note |
 |---|---|
-| `apply(apply(x)) == apply(x)` | the one above; holds on all eleven fixtures |
+| `apply(apply(x)) == apply(x)` | the one above; holds on every fixture |
 | Word multiset preserved | assert **after** stage 3 — markers are intentionally consumed |
 | Line count never increases | |
 | A converted `table` has uniform column count, or is byte-identical | §5.1; ragged input must bail out, never half-convert |
@@ -889,9 +1140,10 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs authored-prose drift |
-| Minimum cluster size | 2 lines | §6.1; candidates are tested highest-first |
+| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
+| Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
 | Max fraction exceeding `W` | 25% | above this the estimate is rejected and unwrapping is skipped (§6.1) |
 | Blank-run collapse | any run → 1 | see below |
 | Marker widths | §7 | |
@@ -910,8 +1162,6 @@ fires on any sample.
   covers GitLab and Jira Cloud both (§5.1); wiki markup would only pay off for a
   legacy Jira text field, and a second emitter means a second output format to
   test.
-- **Multi-line table cells** — reassembling a cell wrapped across physical rows
-  (§5.1 limitation). Needs a sample that exercises it.
 - **Per-clip Reformat** in the Clips tab. Live pasteboard only for now.
 - **Keyboard shortcut.** §4.7 / §9 — no hotkeys in v1.
 - **Sentence-case header detection.** Every header across ten samples has had a
@@ -931,14 +1181,23 @@ fires on any sample.
   other rewrites text. §5's ordering note — least to most invasive — is what
   carries that distinction instead. Behavior does not depend on the label; it
   appears only in `ClipMenu` and SPEC §5.
-- **Code embedded in a prose paste** is not detected (§6.1). Whole-document code
-  is. No fixture exhibits the mixed case; a paste that does is what a rule should
-  be calibrated against.
+- **Embedded code is protected from flattening only** (§6.1, fixture 25). Joins
+  and dedent were measured not to harm it; every other stage is unexamined against
+  a code block, because one sample is all the corpus has. A second mixed paste is
+  what would either widen the exemption or confirm its edge.
+- **An embedded code block does not render as code.** Fixture 25's method comes
+  out at column 0 under a blank line, so a Markdown renderer collapses its four
+  lines into one paragraph — worse than the em dash that prompted the rule, and
+  untouched by it. Fixing it means emitting a fence, which is the item below.
 - **Fenced code has no special handling.** An earlier draft specified a `fence`
   predicate passing ` ``` ` regions through byte-identical. It was never built
   and no fixture contains a fence, so it was cut rather than shipped
   uncalibrated. A mostly-code paste already trips the §6.1 guardrail, and a short
   fence inside prose is short enough that the forced-break test declines it.
+  Fixture 25 raises the stakes: a fence around a detected block is the only thing
+  that makes it survive rendering, and §6.1 now detects one. That is a markup
+  invention on the scale of §5.2's `❯`, on one sample's evidence — which is why it
+  is still here and not in §4.
 - **ASCII art skews by a few columns** when it contains expanding glyphs (§7).
   Accepted; a fix means a new block kind and a detector with no supporting data.
 - **Character count is not display width** (§6.1). Wide characters — CJK, most

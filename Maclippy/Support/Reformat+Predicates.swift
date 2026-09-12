@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Line predicates (§5)
+// MARK: - Line predicates (§5) and whole-document classification (§6.1)
 
 extension Reformat {
 
@@ -40,15 +40,63 @@ extension Reformat {
         return after.dropFirst().first.map { $0 == " " || $0 == "\t" } ?? false
     }
 
-    /// True for a list item and for the continuation lines that follow it, up to
-    /// the next blank. Used only to relax `terminalPunctuation` (§6.3).
-    static func listMembership(_ lines: [String]) -> [Bool] {
+    /// Mean words per line, under which the text is code and the **whole**
+    /// pipeline is a no-op, not just unwrapping.
+    ///
+    /// Quote lines count here even though they are never joined. Their content is
+    /// prose and it is evidence the document is prose — excluding them made a
+    /// mostly-quoted paste read as code and skipped the pipeline entirely.
+    static func isCode(_ lines: [String]) -> Bool {
+        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }
+        guard !measurable.isEmpty else { return true }
+        let words = measurable.reduce(0) { $0 + $1.split(separator: " ").count }
+        return Double(words) / Double(measurable.count) < minWordsPerLine
+    }
+
+    /// Lines belonging to a brace- or semicolon-terminated block inside a prose
+    /// document — code the §6.1 gate cannot see, because the prose around it
+    /// carries the document mean above the threshold.
+    ///
+    /// Precise, not complete. Whole-document code already has a gate, so this may
+    /// miss a language and cost nothing; that is what lets it use the `;{}` signal
+    /// §6.1 rejected as a *gate*, where missing Swift and Python was fatal.
+    static func codeBlockMembership(_ lines: [String]) -> [Bool] {
+        var result = [Bool](repeating: false, count: lines.count)
+        var start = 0
+
+        func closeBlock(endingAt end: Int) {
+            let block = lines[start..<end]
+            guard block.count >= minCodeBlockLines else { return }
+            let terminated = block.filter { ";{}".contains($0.trimmed.last ?? " ") }.count
+            guard terminated * 2 > block.count else { return }
+            for i in start..<end { result[i] = true }
+        }
+
+        for (i, line) in lines.enumerated() where line.trimmed.isEmpty {
+            closeBlock(endingAt: i)
+            start = i + 1
+        }
+        closeBlock(endingAt: lines.count)
+        return result
+    }
+
+    /// Marks each line's membership in a run that `opens` starts, ending at the
+    /// first line that cannot belong to it — a blank, or a table row. The one
+    /// shape in this design that a per-line predicate cannot express, and the only
+    /// state anywhere in the pipeline: a list item's continuations carry no marker
+    /// (§6.3), and neither do a `❯` prompt's (§5.2). Both are this fold.
+    ///
+    /// A table row closes a run because a blank does not always come first: the
+    /// CLI brackets its prompt in `───` rules with no blank line between, and
+    /// without this the closing rule and the status footer below it were quoted as
+    /// though the user had typed them (fixture 24).
+    static func runMembership(_ lines: [String], openedBy opens: (String) -> Bool) -> [Bool] {
         var result: [Bool] = []
         var inside = false
         for line in lines {
-            if line.trimmed.isEmpty {
+            if line.trimmed.isEmpty || isTable(line) {
                 inside = false
-            } else if startsListItem(line) {
+            } else if opens(line) {
                 inside = true
             }
             result.append(inside)

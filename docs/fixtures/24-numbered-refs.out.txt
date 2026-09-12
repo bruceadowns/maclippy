@@ -1,0 +1,107 @@
+AFDL-66683 - edits to apply
+
+Amplifying Detail(s)
+
+1. REPLACE the first bullet. It describes the pre-port code as present tense; the port landed.
+
+AbstractHistoryFacade validates region parameters in three identical 22-line inline blocks - :583 queryHistory, :708 countHistory, :977 queryHistoryAodr - each recognizing only the region/area/geography aliases, splitting the eval prefix with lastIndexOf, and throwing IllegalArgumentException. Each collapses to roughly five lines calling FacadeGeographySupport.
+
+->
+
+> Landed in udl 466c108fd (2026-08-31), alongside AFDL-66691. All three region blocks validate through FacadeGeographySupport.validateRegionValue: AbstractHistoryFacade:566 (queryHistory), :680 (countHistory), :936 (queryHistoryAodr).
+> Each replaced a 22-line inline block that recognized only region/area/geography, split the eval prefix with lastIndexOf, and threw IllegalArgumentException.
+
+2. KEEP bullets 2, 3 and 4 as written - the String entry point, the tempRegionSearchWithEval/WithoutEval plumbing, and the do-all-three rationale are all still accurate. Optionally flip bullet 2 to past tense (validateRegionValue is the String entry point; validateRegionParam is the alias-scanning wrapper).
+
+3. REPLACE the last bullet. Wrong method count, and the deletion now has a ticket.
+
+Once this lands, delete the read-path half of GeographyUtils (matchGeometry, regionEval, regionEvalTuple, validateRegionEval, getRegionAsGeometry) in component-library. The write-path half stays.
+
+->
+
+> The component-library read-path deletion is AFDL-66697, not this ticket: six methods are now production-dead, not five (setSearchRegionAndEval is also read-path), and validateRegion must survive as the write path's RESTRICTIVE check.
+
+4. ADD a new bullet - this is the one thing that will otherwise cost QA a false defect:
+
+> The nine aliases do not appear in the facade. QueryMongoParamParser.geospatialKey (bluestaq-udl-common, :218-230) canonicalizes all nine wire names into three request-map keys - regionText/regionGeoJSON/region -> REGION,
+> geographyText/geographyJson/geography -> GEOGRAPHY, atext/agjson/area -> AREA - and the facade switches on those three keys. Test the wire names, not the map keys; the three-way check at :566, :680 and :936 is the complete port, not a
+> partial one.
+
+5. ADD a second new bullet - the exception path, since it looks wrong at a glance:
+
+> validateRegionValue throws BadRequestException, which is not caught by the surrounding catch (IllegalArgumentException) at :584, :698 and :949, so a bad region surfaces as 400 directly rather than being re-wrapped.
+
+Risks and/or areas of concern
+
+6. REPLACE risk 1 - same facts, but they are shipped behavior now, and the facade count was low:
+
+User-visible across 64 history facades: aliases go from 3 to 9...
+
+->
+
+> User-visible across 66 history facades (64 direct subclasses of AbstractHistoryFacade, plus GroundImagery and AnalyticImagery via AbstractGeoImageryFacade): aliases went 3 -> 9, RESTRICTIVE strictness now rejects out-of-range
+> coordinates and invalid topology, 400 replaced the old IllegalArgumentException wrapping, and the underscore split is anchored. QA is confirming shipped behavior, not discovering it.
+
+7. REPLACE risk 2 - the coverage gap closed, and "8 geo-filtering collections" overstates what filters:
+
+No existing integration test covers a region parameter against any history endpoint. Coverage is greenfield across the 8 geo-filtering collections and 3 endpoints, and the async AODR endpoint is materially harder to test than the synchronous ones.
+
+->
+
+> Integration coverage landed with the port: POIIT (region and area on query and count, seeded-history filtering, GeoJSON region, equals_ parity with findAll, three invalid-region cases against both query and count, unknown-operator
+> message), plus GroundImageryIT, SigActIT, WeatherReportIT and LaunchIndicatorIT. /history/aodr is unit-covered only - it resolves the notification target through LDAP before reading the region and answers 406 first where LDAP is
+> absent (see the note at POIIT:391). Of the 8 map entries only 7 are reachable from a history endpoint; beamcontour is mapped but has none.
+
+8. ADD a risk - the two known defects QA will trip over and could file against this ticket:
+
+> Two pre-existing defects are visible from these endpoints and are out of scope: five collections validate a region and then return everything unfiltered (AFDL-66733), and /history/count never applies a region at all (AFDL-66743).
+> Neither is a regression from this port.
+
+9. KEEP risk 3, retargeted: Two releases: the udl change (this ticket), then a second component-library release for AFDL-66697.
+
+Acceptance Criteria
+
+10. AC1 - REPLACE, add the line anchors so it is checkable:
+
+> All three history region blocks validate through FacadeGeographySupport (AbstractHistoryFacade:566, :680, :936), and no GeographyUtils reference remains on the history read path.
+
+11. AC2 - SPLIT INTO THREE. As written it bundles two outcomes, cites an MR instead of a behavior, and demands /history/aodr coverage the harness cannot produce:
+
+/history, /history/count and /history/aodr accept the same nine aliases and reject the same invalid regions as the endpoints ported in udl!5228.
+
+->
+
+> - Each of the nine region aliases - region, area, geography, regionText, regionGeoJSON, atext, agjson, geographyText, geographyJson - is accepted on /history and /history/count.
+> - An unparseable region, an out-of-range coordinate, and an unrecognized eval prefix each return 400 on /history and /history/count, matching the same query string against the collection's non-history endpoint.
+> - An unrecognized eval prefix returns a 400 whose message names the offending operator.
+
+12. AC3 - REPLACE with a named endpoint pair, so QA is not choosing one:
+
+> equals_ returns the same records on /udl/poi and /udl/poi/history.
+
+13. AC4 - DELETE. "GeographyUtils retains only its write-path methods" cannot be verified against the udl artifact under test. It belongs to AFDL-66697.
+
+14. AC5 - REPLACE with the collections that are actually covered, and the AODR carve-out:
+
+> Integration coverage asserts valid and rejected region parameters on /history and /history/count for POI, GroundImagery, SigAct and WeatherReport; /history/aodr is covered by unit tests, by design.
+
+15. ADD an out-of-scope line below the ACs:
+
+> Out of scope: deletion of the dead read-path methods from GeographyUtils - AFDL-66697, which needs its own component-library release.
+
+Dependencies
+
+16. REPLACE - record that it is satisfied, and the outbound edge:
+
+> AFDL-66686 (landed 2026-08-18). The matcher had to port first, or equals_ passes validation and then drops every row. Gates AFDL-66697.
+
+---
+
+Net effect: 5 AC lines become 7, one is deleted as unverifiable, and the ticket stops claiming coverage of an endpoint that 406s in the IT harness. The two additions in 4 and 5 exist purely to stop QA filing the three-key check and the IllegalArgumentException catch as defects.
+
+Sautéed for 48s * done 11:08 AM
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> now AFDL-66686
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+⏵⏵ auto mode on (shift+tab to cycle) * <- for agents

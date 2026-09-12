@@ -1,0 +1,18 @@
+Not posted - here's the draft:
+
+> Tried it: ArC fails augmentation - "not possible to automatically add a synthetic no-args constructor to an unproxyable bean class" - because AbstractFacade has
+> no no-args ctor to synthesize from. Keeping both constructors builds, but the no-arg one stays public and the field can't be final, so it doesn't buy the "can't
+> construct it half-initialized" guarantee. On private: the Quarkus CDI reference discourages private injected members because they force reflection - src/main has
+> 265 package-private @Inject fields and 0 private. Proposing we leave these as field injection; happy to take the two-ctor version if you still prefer it.
+
+The constructor-injection change is still sitting in my working tree, unstaged. Say the word and I'll revert it and post this, or post first and hold the code.
+
+Worked for 1m 43s
+
+> a sentence or 2
+
+> Constructor injection fails ArC augmentation on these - AbstractFacade has no no-args ctor for it to synthesize from - and the Quarkus CDI reference discourages
+> private injected members since they force reflection (src/main: 265 package-private @Inject fields, 0 private). Leaving these as field injection unless you feel
+> strongly.
+
+Revert the working-tree change and post this?

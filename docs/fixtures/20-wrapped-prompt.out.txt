@@ -1,0 +1,31 @@
+"Cross-transfer topic" isn't a real name in the platform. It appears in no repo at all - the only two occurrences workspace-wide are in your own DRP (design.md:562 and :1321), where you adopted the epic author's phrase. It's a portmanteau of the two real families, which is precisely why it's ambiguous.
+
+The actual names, from code/udl/config/udl-properties.yaml:481-485:
+
+| Property | Topic | Side | Who touches it |
+| --- | --- | --- | --- |
+| kafkaXDomainConsumerTopic | xtransfer | high | udl consumes |
+| kafkaXDomainHighFlowConsumerTopic | xtransferhighflow | high | udl consumes |
+| kafkaXDomainLargeMessageConsumerTopic | xtransferlargemessage | high | udl consumes |
+| kafkaXDomainHighFlowTopic | crossdomainhighflow | low | xdomainproducer writes |
+| kafkaXDomainLargeMessageTopic | crossdomainlargemessage | low | xdomainproducer writes |
+
+The convention is clean: Consumer in the property name -> xtransfer*; no Consumer -> crossdomain*. "Cross-transfer" splices cross(domain) with (x)transfer, so it reads onto either half.
+
+Three readings, and they don't cost the same:
+
+1. xtransfer* (high side). DataSync publishes directly into the cross-domain broker, on the exact topics you repartition irreversibly. This is the collision case, and the one AC-27 is written for.
+2. crossdomain* (low side). DataSync publishes low-side, NiFi carries it across, it arrives on xtransfer* keyed by whatever the high-side processor sets - so the key contract holds transitively. But the low-side path is explicitly Out of Scope in your DRP, and the low-side producer sends an empty-string key today, so "transitively" is doing real work there.
+3. Neither - the author means the mechanism, not a topic. DataSync already has its own broker cluster, and the epic pairs the phrase with "or whether an alternative solution better fits the requirements." That's an evaluation of whether to use the cross-domain transfer path at all, with topic selection downstream. "Direct to cross-transfer or via handler" is then a routing choice inside that mechanism.
+
+I'd put my money on 3. It's the only reading where the deliverable is a genuine architectural decision rather than a config lookup, and it's the only one that makes "alternative solution" mean anything for a product that already has somewhere to publish.
+
+That changes action #4 from my review. The fix at design.md:562 isn't to pick a family - it's to stop inheriting the epic's coinage and say plainly that the target family is undetermined, because under reading 3 the answer doesn't exist yet. Asserting either family right now would be inventing precision the source doesn't have.
+
+The bd search is still running across the repos; I'll report when it lands.
+
+Waiting for 1 background agent to finish
+
+> can you derive any related understanding from this paragraph - Cross-transfer topic vs. alternative solution
+> A deliberate evaluation is required to determine whether the cross-transfer topic is the right mechanism for this use case, or whether an alternative solution better fits the requirements. The outcome should be a documented
+> architectural decision with rationale.

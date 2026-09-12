@@ -16,7 +16,10 @@ enum Reformat {
     /// Slack in the forced-break test; absorbs prose that only approximates a column.
     static let breakTolerance = 8
     /// A cluster smaller than this is coincidence, not evidence of a wrap column.
-    static let minClusterLines = 2
+    /// Lowered to 2 for fixture 16 and put back once the lone-candidate fallback
+    /// covered that case; the corpus passes at either value, so the constant has
+    /// slack rather than sitting on a knife edge.
+    static let minClusterLines = 3
     /// A line-initial token longer than this is a path, URL or identifier sitting
     /// on its own line, never a word the wrapper pushed down. Absolute rather than
     /// relative to `W`, because `W` grows once lines are joined — a `W`-relative
@@ -24,8 +27,16 @@ enum Reformat {
     static let maxAbsorbableToken = 100
     /// Above this share of lines exceeding W, the estimate is an artifact.
     static let maxExceedingW = 0.25
+    /// A run of this many interior spaces is a row boundary the terminal wrote as
+    /// padding, not alignment. Real column gutters in the corpus reach 26; padding
+    /// artifacts start at 148. Absolute rather than relative to `W`, for the same
+    /// reason as `maxAbsorbableToken`.
+    static let minPadRun = 32
     /// Below this, the text is code rather than wrapped prose (§6.1).
     static let minWordsPerLine = 8.0
+    /// One line ending in a brace is a prose sentence far more often than it is
+    /// code; two is already a block.
+    static let minCodeBlockLines = 2
 
     // MARK: - Tables (§7)
 
@@ -50,8 +61,9 @@ enum Reformat {
         "\u{00B7}": "*"                          // ·
     ]
 
+    /// Gutters that mean "quoted", all normalizing to `> `.
+    static let quoteGlyphs: Set<Character> = ["▎", "┃", ">", "❯"]
     static let boxChars = Set("│┌├└┬┴┼─╭╰┏┗┣┃┐┤┘╮╯┓┛┫|")
-    private static let cellSeparators = Set("│┃|")
 
     // MARK: - Entry point
 
@@ -64,21 +76,24 @@ enum Reformat {
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\u{200B}", with: "")
 
-        var lines = text.components(separatedBy: "\n").map(substituteGutter)  // 3
-        lines = lines.map { String($0.reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }  // 4
+        // Padding closes *after* stage 3, so its table exemption sees a marker-led
+        // row (`⏺ │ a │ b │`) as the table it is.
+        var lines = substituteGutters(text.components(separatedBy: "\n"))                    // 3
+            .map(closePadding)                                              // 3b
+            .map(rewriteLeadingMarker)                                      // 3c
+        lines = lines.map { $0.trimmedTrailing }                         // 4
 
-        // Code guardrail: the whole pipeline is a no-op, not just unwrapping.
-        let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) && !isQuote($0) }
-        let wordsPerLine = measurable.isEmpty ? 0
-            : Double(measurable.reduce(0) { $0 + $1.split(separator: " ").count }) / Double(measurable.count)
-        guard wordsPerLine >= minWordsPerLine else { return input }  // verbatim
+        guard !isCode(lines) else { return input }   // verbatim (§6.1)
 
         let width = estimateWidth(lines)                                // 5
         let joins = width.map { forcedBreaks(lines, width: $0) } ?? []  // 6
         lines = performJoins(lines, at: Set(joins))
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
-        lines = lines.map(flattenPunctuation)                           // 9
+        // Membership is computed here, not earlier: joins and table conversion
+        // both change the line count, so any index taken before them is stale.
+        let code = codeBlockMembership(lines)
+        lines = lines.indices.map { code[$0] ? lines[$0] : flattenPunctuation(lines[$0]) }  // 9
         let body = trimBlanks(collapseBlankRuns(lines)).joined(separator: "\n")  // 10, 11
 
         // Output always terminates with a line feed, whether or not the input
@@ -135,29 +150,33 @@ private extension Reformat {
         return i
     }
 
-    // MARK: - Stage 3
+    // MARK: - Stage 2b — padding as a row boundary
 
-    /// Replaces a leading marker or quote gutter. Quote gutters normalize to
-    /// `> `; markers become an equal-width replacement so columns are preserved.
+    /// Closes a long run of interior spaces to the single space a wrap join uses.
+    /// A terminal pads a row out to its own width, so a wrapped row can reach the
+    /// clipboard as `text` + padding + the next row's first words, with the break
+    /// expressed as spaces rather than a newline. Content *after* the padding is
+    /// what says the row continued — padding at the end of a line means the row
+    /// ended there, and stage 4 already drops that.
     ///
-    /// `❯` is the terminal prompt, not a rendered blockquote, so mapping it to
-    /// `> ` does invent markup — the one place §5.2's de-rendering argument does
-    /// not apply. It earns the exception structurally: a prompt is a discrete
-    /// utterance that must never merge into neighbouring prose, and quote lines
-    /// are the only kind the unwrapper will not touch.
-    static func substituteGutter(_ line: String) -> String {
-        let pad = String(repeating: " ", count: line.indentWidth)
-        let body = line.drop { $0 == " " }
-        guard let first = body.first else { return line }
-
-        if first == "▎" || first == "┃" || first == ">" || first == "❯" {
-            let rest = body.dropFirst().drop { $0 == " " }
-            return rest.isEmpty ? pad + ">" : pad + "> " + rest
+    /// Not routed through the forced-break rule, which reads pre-join lengths and
+    /// would see the tail as a short line that no wrapper had to break.
+    static func closePadding(_ line: String) -> String {
+        guard !isTable(line) else { return line }   // cells pad to align
+        // Split the indent off first: it is the one leading run that may legitimately
+        // be this long, and collapsing it would flatten deeply nested output.
+        let body = line.drop { $0 == " " || $0 == "\t" }
+        guard body.contains(String(repeating: " ", count: minPadRun)) else { return line }
+        var result = ""
+        var run = 0
+        for character in body {
+            guard character != " " else { run += 1; continue }
+            result += run >= minPadRun ? " " : String(repeating: " ", count: run)
+            result.append(character)
+            run = 0
         }
-        if let replacement = markers[first] {
-            return pad + replacement + body.dropFirst().drop { $0 == " " }
-        }
-        return line
+        // A run with nothing after it is trailing, not a break; stage 4 drops it.
+        return line[..<body.startIndex] + result + String(repeating: " ", count: run)
     }
 
     // MARK: - Stage 5 — wrap width (§6.1)
@@ -183,22 +202,31 @@ private extension Reformat {
         // checks. Picking one and giving up when it fails loses the real column
         // whenever short lines happen to form a bigger cluster than the wrapped
         // ones — which is common when only a couple of lines actually wrapped.
-        for cluster in clusters.sorted(by: { $0.max()! > $1.max()! }) {
-            let lo = cluster.min()!, hi = cluster.max()!
-            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else { continue }
-            let candidate = hi
-            guard Double(lengths.filter { $0 > candidate }.count)
+        // `clusters` is already ordered highest-first: it is built by walking the
+        // distinct lengths downward, so each new cluster holds smaller values.
+        var lonely: Int?
+        for cluster in clusters {
+            guard let hi = cluster.first, let lo = cluster.last else { continue }
+            guard Double(lengths.filter { $0 > hi }.count)
                 <= maxExceedingW * Double(lengths.count) else { continue }
-            return candidate
+            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else {
+                lonely = lonely ?? hi   // highest-first, so the first one seen is the highest
+                continue
+            }
+            return hi
         }
-        return nil
+        // A paragraph wrapped N times puts only N-1 lines at the column, so a
+        // single wrap can never form a cluster. Trust the lone candidate only when
+        // no populated one exists anywhere below it — that is what separates the
+        // one-wrap paragraph from a stray long line above a real column.
+        return lonely
     }
 
     // MARK: - Stage 6 — unwrapping (§6.2, §6.3)
 
     /// Indices `i` where line `i` should absorb line `i+1`.
     static func forcedBreaks(_ lines: [String], width: Int) -> [Int] {
-        let inList = listMembership(lines)
+        let inList = runMembership(lines, openedBy: startsListItem)
         var result: [Int] = []
 
         for i in 0..<max(0, lines.count - 1) {
@@ -259,60 +287,16 @@ private extension Reformat {
         }
     }
 
-    // MARK: - Stage 8 — box tables → Markdown (§5.1)
-
-    static func convertTables(_ lines: [String]) -> [String] {
-        var result: [String] = []
-        var block: [String] = []
-        for line in lines {
-            if isTable(line) {
-                block.append(line)
-            } else {
-                if !block.isEmpty { result += convert(block); block = [] }
-                result.append(line)
-            }
-        }
-        if !block.isEmpty { result += convert(block) }
-        return result
-    }
-
-    static func convert(_ block: [String]) -> [String] {
-        // Without a rule row it is ASCII art, not a table. Converting a lone
-        // pipe-delimited line invents a header and a delimiter for it.
-        guard block.contains(where: isRuleRow) else { return block }
-        let rows = block.filter { !isRuleRow($0) }.map(cells)
-        guard let first = rows.first else { return block }
-        guard rows.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
-
-        let delimiter = Array(repeating: "---", count: first.count)
-        return ([first, delimiter] + rows.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
-    }
-
-    static func cells(_ line: String) -> [String] {
-        var parts = line.trimmed.split(omittingEmptySubsequences: false, whereSeparator: cellSeparators.contains)
-            .map { $0.trimmed.replacingOccurrences(of: "|", with: "\\|") }
-        if parts.first?.isEmpty == true { parts.removeFirst() }
-        if parts.last?.isEmpty == true { parts.removeLast() }
-        return parts
-    }
-
-    /// A box rule (`├──┼──┤`) or a Markdown delimiter (`| --- | --- |`).
-    /// Recognizing the second is what stops a converted table growing a
-    /// delimiter row on every run.
-    static func isRuleRow(_ line: String) -> Bool {
-        guard isTable(line) else { return false }
-        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }) { return true }
-        let c = cells(line)
-        return !c.isEmpty && c.allSatisfy { cell in
-            let core = cell.drop { $0 == ":" }.reversed().drop { $0 == ":" }
-            return !core.isEmpty && core.allSatisfy { $0 == "-" }
-        }
-    }
-
     // MARK: - Stage 9 — flatten (§7)
 
+    /// A circled numeral surviving to here is inline — a cross-reference, not a
+    /// marker (stage 3c took those) — so it flattens to a bare digit, which is
+    /// also the only width-preserving choice. `in ④ and ⑤` reads worse as
+    /// `in 4. and 5.`.
     static func flattenPunctuation(_ line: String) -> String {
-        collapseDoubleDash(rewriteLeadingBullet(line.map { flatten[$0] ?? String($0) }.joined()))
+        collapseDoubleDash(line.map {
+            flatten[$0] ?? circledNumeral($0).map(String.init) ?? String($0)
+        }.joined())
     }
 
     /// `--` is the typewriter em dash, so it collapses to the same single hyphen
@@ -336,15 +320,6 @@ private extension Reformat {
             }
         }
         return out
-    }
-
-    static func rewriteLeadingBullet(_ s: String) -> String {
-        let indent = s.prefix { $0 == " " || $0 == "\t" }
-        let rest = s.dropFirst(indent.count)
-        guard rest.first == "\u{2022}" else { return s }
-        let body = rest.dropFirst().drop { $0 == " " || $0 == "\t" }
-        guard body.count < rest.count - 1 else { return s }   // require a separating space
-        return indent + "- " + body
     }
 
     // MARK: - Stages 10, 11
