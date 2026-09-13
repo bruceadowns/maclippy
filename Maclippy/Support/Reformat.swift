@@ -187,7 +187,8 @@ private extension Reformat {
     /// it, while short lines (headers, labels, tails) outnumber wrapped ones in
     /// any structured document.
     static func estimateWidth(_ lines: [String]) -> Int? {
-        let lengths = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }.map(\.count)
+        let lengths = lines.filter { !$0.trimmed.isEmpty && !isTable($0) && !isListingRow($0) }
+            .map(\.count)
         guard lengths.count >= 2 else { return nil }
 
         var clusters: [[Int]] = []

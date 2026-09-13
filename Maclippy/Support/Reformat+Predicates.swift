@@ -40,6 +40,29 @@ extension Reformat {
         return after.dropFirst().first.map { $0 == " " || $0 == "\t" } ?? false
     }
 
+    /// A row of a diff or numbered listing: `566 -text`, `563  text`, or a line
+    /// number with nothing after it. Excluded from the width estimate only —
+    /// guarding joins as well was measured inert (§8).
+    ///
+    /// A diff view **inherits a wrap cluster from the file it displays** — every
+    /// row is a source line at its own length plus a fixed gutter — and that
+    /// cluster is tighter and more populous than the terminal's own, so it wins
+    /// the estimate outright and the rows are then joined to each other. Take the
+    /// rows out of the estimate and `W` is right, at which point no row comes near
+    /// enough to the column to join anyway.
+    ///
+    /// Two spaces or a `-`/`+` after the number, never one space: `563 lines were
+    /// changed` opens a sentence, not a listing.
+    static func isListingRow(_ line: String) -> Bool {
+        let body = line.drop { $0 == " " }
+        let digits = body.prefix { $0.isNumber }
+        guard !digits.isEmpty else { return false }
+        let rest = body.dropFirst(digits.count)
+        if rest.isEmpty { return true }
+        guard rest.first == " " else { return false }
+        return rest.dropFirst().first.map { " -+".contains($0) } ?? false
+    }
+
     /// Mean words per line, under which the text is code and the **whole**
     /// pipeline is a no-op, not just unwrapping.
     ///

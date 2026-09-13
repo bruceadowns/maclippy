@@ -251,6 +251,7 @@ nothing).
 |---|---|---|
 | `isTable` | trimmed line starts with `│┌├└┬┴┼─╭╰┏┗┣` or `\|` **and** ends with the mirror set | never joins, either side (§5.1) |
 | `isQuote` | line opens with `>` — stage 3 has already normalized `▎`, `┃` and `❯` to it | never joins, either side (§5.2) |
+| `isListingRow` | line-initial digits followed by two spaces, ` -`, ` +`, or nothing | excluded from the width estimate (§6.1); **no** join effect — guarding joins too was measured inert |
 | `isHeader` | ALL-CAPS after stripping a trailing parenthetical, **and** not ending in `.?!` | never joins, either side |
 | `isListStart` | line begins `- `, `* `, `+ `, `N. `, `N) ` | never joined *into* |
 | `inList` | line is a list item, or follows one without an intervening blank | relaxes `terminalPunctuation` (§6.3) |
@@ -563,10 +564,10 @@ predicates: joins and table conversion both change the line count, so an index
 taken earlier is stale.
 
 **The threshold rests on one sample.** `minWordsPerLine` was calibrated against
-seven code files; the majority rule here has fixture 25 and the neutrality of the
-other twenty-four behind it, which is thinner. It is recorded as such rather than
-dressed up — the `⎿` width in fixture 12 started on the same footing and was
-corrected when a second sample arrived.
+seven code files; the majority rule here has fixture 25 and the neutrality of
+every other fixture behind it, which is thinner. It is recorded as such rather
+than dressed up — the `⎿` width in fixture 12 started on the same footing and
+was corrected when a second sample arrived.
 
 Approaches tried and rejected, each defeated by real data rather than reasoning:
 `;` `{` `}` as unconditional terminators (fixes C-family only — Swift and Python
@@ -636,6 +637,25 @@ It is *not* routed through §6.2 by splitting the line at the run. That reads we
 measures pre-join lengths, so the 3-character tail `not` looks like a line no
 wrapper was ever forced to break. The join stops there on pass 1 and happens on
 pass 2, which is an idempotency violation.
+
+Listing rows are exempt for a different reason, and it is the sharper one. A diff
+view **inherits a wrap cluster from the file it displays**: every row is a source
+line at its own authored length plus a fixed line-number gutter, so the rows sit
+tightly grouped at a column that belongs to the *file*, not to the terminal. In
+fixture 26 that cluster is 82–94 with 16 lines, while the terminal's real 178–183
+column appears on only 2 and fails `minClusterLines`. The estimator picks 94,
+every §6.2 heuristic then fires correctly on a false premise, and the diff rows
+are joined to each other — line numbers, `-`/`+` markers and all — into one line
+per block. Excluding them from the estimate is the whole fix, and it adds no
+constant.
+
+A join guard was written alongside it and **removed**: with the rows out of the
+estimate, `W` is 183 and no row comes within `breakTolerance` of it, so the guard
+never decides anything. Ablation over the whole corpus confirmed it — identical
+output everywhere. It is recorded here because the reverse ablation is the
+interesting one: keeping the guard and restoring the rows to the estimate leaves
+`W` at 94, joins the `⎿` block's content lines, and **is not idempotent**. The
+estimate is where a listing row does damage; joins were never the mechanism.
 
 Table rows are exempt: cells pad to align, and fixtures 3, 10 and 14 lose their
 tables without the exemption.
@@ -984,6 +1004,7 @@ wrapping from authored prose that approximates a column.
 | 23 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | terminal | 231 | 231, 1 line (lone fallback) | 1 |
 | 24 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks, a `❯` prompt bracketed by `─` rules with no blank line | 62 prose (+2 rules) | terminal | 237 | 230–237, 12 lines (7) | 4 |
 | 25 | Prose analysis wrapping a four-line Java method, two `❯` prompts, a `▎` block | 37 prose (+4 code) | terminal | 208 | 201–208, 13 lines (6) | 8 |
+| 26 | Claude Code transcript: two `⏺ Bash` calls, `⎿` result gutters, two diff views with line numbers and `-`/`+` | 19 prose (+22 listing) | terminal | 183 (lone fallback) | 178–183, 2 lines (lone) | 0 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1045,6 +1066,8 @@ argued about:
 | Padding run (21) | delete the stage | fixture 21 stops being idempotent — **load-bearing** |
 | Lone-candidate fallback (22) | drop it, or allow any 1-line cluster | without it a once-wrapped paragraph cannot be measured; allowing every lone cluster costs fixture 1 its joins — **load-bearing, and adds no constant** |
 | Wrapped cells (23) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
+| Listing rows (26) | drop the estimate exclusion | `W` returns to 94, the `⎿` block's lines join wrongly, and the result **is not idempotent** — **load-bearing, no constant** |
+| Listing-row join guard | — | removed before shipping: identical output on all 26 fixtures with it deleted. The estimate exclusion makes it unreachable |
 | Code block exemption (25) | delete it | the em dash in fixture 25's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
 All three survive, but the audit did find one redundancy: fixture 16's lowering
@@ -1083,6 +1106,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 23 | Wrapped cells reassemble, delimited by the rules the table already carries (§5.1) — closing a Deferred item. Two interior rules are required, because one is the header separator and Reformat's own output has exactly one |
 | 24 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 | 25 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
+| 26 | A diff view's rows are excluded from the width estimate. The rows carry the *displayed file's* wrap column plus a gutter, which outnumbers and outranks the terminal's own — the estimator was measuring the wrong document |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
 like the rules had settled; sample 6 then broke two at once. Samples 7 and 8

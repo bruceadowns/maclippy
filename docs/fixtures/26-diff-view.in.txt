@@ -1,0 +1,45 @@
+⏺ Bash(python3 - <<'PY'
+      import pathlib…)
+  ⎿  ok
+     **The threshold rests on one sample.** `minWordsPerLine` was calibrated against
+     seven code files; the majority rule here has fixture 25 and the neutrality of
+     … +3 lines (ctrl+o to expand)
+  ⎿  Updated docs/reformat.md (+2 -2)
+      563  taken earlier is stale.
+      564  
+      565  **The threshold rests on one sample.** `minWordsPerLine` was calibrated against
+      566 -seven code files; the majority rule here has fixture 25 and the neutrality of the                                                                                                             
+      567 -other twenty-four behind it, which is thinner. It is recorded as such rather than                                                                                                             
+      566 +seven code files; the majority rule here has fixture 25 and the neutrality of                                                                                                                 
+      567 +every other fixture behind it, which is thinner. It is recorded as such rather than                                                                                                           
+      568  dressed up — the `⎿` width in fixture 12 started on the same footing and was
+      569  corrected when a second sample arrived.
+      570  
+  ⎿  Allowed by auto mode classifier
+
+⏺ Bash(python3 - <<'PY'
+      import pathlib…)
+  ⎿  rewrapped
+     docs/reformat.md:4 (81)
+     docs/reformat.md:18 (81)
+     … +8 lines (ctrl+o to expand)
+  ⎿  Updated docs/reformat.md (+3 -3)
+      564  
+      565  **The threshold rests on one sample.** `minWordsPerLine` was calibrated against
+      566  seven code files; the majority rule here has fixture 25 and the neutrality of
+      567 -every other fixture behind it, which is thinner. It is recorded as such rather than                                                                                                           
+      568 -dressed up — the `⎿` width in fixture 12 started on the same footing and was                                                                                                                  
+      569 -corrected when a second sample arrived.                                                                                                                                                       
+      567 +every other fixture behind it, which is thinner. It is recorded as such rather                                                                                                                
+      568 +than dressed up — the `⎿` width in fixture 12 started on the same footing and                                                                                                                 
+      569 +was corrected when a second sample arrived.                                                                                                                                                   
+      570  
+      571  Approaches tried and rejected, each defeated by real data rather than reasoning:
+      572  `;` `{` `}` as unconditional terminators (fixes C-family only — Swift and Python
+  ⎿  Allowed by auto mode classifier
+
+⏺ Done — docs/reformat.md:566 now reads "the neutrality of every other fixture behind it" instead of naming a count, and I rewrapped the paragraph to match the surrounding width.
+
+  That was the only hardcoded count I'd introduced. The other two 24s in the file are fixture numbers (the corpus row and the 16-at-241–242 cross-reference), not counts, so they stay.
+
+  The edit is uncommitted in the working tree; the branch on origin still has the version with "twenty-four".

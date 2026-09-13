@@ -47,7 +47,8 @@ indent to the selection, a response marker stacked on top of a quote gutter, and
 a wrap that arrived as 183 interior spaces instead of a newline, a
 paragraph wrapped exactly once, a table whose cells wrap across three physical
 rows and sit vertically centered, a prompt bracketed by rules with no blank line
-to end it, and a Java method embedded in prose.
+to end it, a Java method embedded in prose, and a diff view whose numbered rows
+carry a wrap column of their own.
 
 There is no *whole-document* code fixture. Reformat leaves such a paste
 byte-identical (§6.1), so the pair would be a file diffed against itself — the
