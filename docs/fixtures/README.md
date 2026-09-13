@@ -47,13 +47,15 @@ indent to the selection, a response marker stacked on top of a quote gutter, and
 a wrap that arrived as 183 interior spaces instead of a newline, a
 paragraph wrapped exactly once, a table whose cells wrap across three physical
 rows and sit vertically centered, a prompt bracketed by rules with no blank line
-to end it, a Java method embedded in prose, and a diff view whose numbered rows
-carry a wrap column of their own.
+to end it, a Java method embedded in prose, a `·` in body prose where every earlier one sat
+on a status line, a URL the wrapper split mid-token, a diff view whose numbered rows carry a
+wrap column of their own, and a tool result holding indented Java behind its
+gutter.
 
 There is no *whole-document* code fixture. Reformat leaves such a paste
 byte-identical (§6.1), so the pair would be a file diffed against itself — the
 calibration that established the guardrail lives in the spec, not on disk. Code
-embedded in prose is a different case and fixture 25 covers it.
+embedded in prose is a different case and fixture 23 covers it.
 
 ## Adding one
 
@@ -67,5 +69,5 @@ decided anything.
 comes out clean and idempotent under the rules as they stand, it moved nothing,
 and it belongs in the scratch pile rather than on disk. Coverage is not the
 argument for a pair — a rule it forced, or a rule it pins against regression, is.
-Samples 5, 10 and 14 predate this bar and §8 records them as moving no rule; they
+Samples 5, 10 and 13 predate this bar and §8 records them as moving no rule; they
 are history, not precedent.

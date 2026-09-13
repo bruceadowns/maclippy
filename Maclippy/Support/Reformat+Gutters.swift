@@ -4,21 +4,12 @@ import Foundation
 
 extension Reformat {
 
-    /// A `❯` prompt gutters only its first line, so its extent is inferred: it
-    /// runs to the next blank, and those continuations are quoted too.
-    ///
-    /// Only the prompt needs that. A `▎` block marks every one of its own lines,
-    /// and an `⏺` response marker introduces body prose that must *not* be quoted
-    /// — the same shape means opposite things depending on the opening glyph, and
-    /// the prompt is the only one whose extent position can supply. A line already
-    /// carrying a gutter of its own keeps it, which is what stops an `⏺` response
-    /// abutting a prompt from being swallowed into the quote.
+    /// Per-line, because every in-domain gutter marks each of its own lines: a
+    /// `▎` block repeats its bar, and an `⏺` opens a response whose body prose
+    /// must not be quoted at all. Inferring a gutter's extent was only ever needed
+    /// for the `❯` prompt, which §0 puts out of domain.
     static func substituteGutters(_ lines: [String]) -> [String] {
-        let prompted = runMembership(lines) { $0.drop { $0 == " " }.first == "❯" }
-        return zip(lines, prompted).map { line, isPrompted in
-            guard isPrompted, !isGutter(line) else { return substituteGutter(line) }
-            return String(repeating: " ", count: line.indentWidth) + "> " + line.trimmed
-        }
+        lines.map(substituteGutter)
     }
 
     /// True when the line already opens with a marker or quote glyph of its own.
@@ -30,27 +21,25 @@ extension Reformat {
     /// Replaces a leading marker or quote gutter. Quote gutters normalize to
     /// `> `; markers become an equal-width replacement so columns are preserved.
     ///
-    /// `❯` is the terminal prompt, not a rendered blockquote, so mapping it to
-    /// `> ` does invent markup — the one place §5.2's de-rendering argument does
-    /// not apply. It earns the exception structurally: a prompt is a discrete
-    /// utterance that must never merge into neighbouring prose, and quote lines
-    /// are the only kind the unwrapper will not touch.
+    /// Every glyph here was a rendered blockquote in the terminal, so the
+    /// substitution restores markup rather than inventing it (§5.2).
     static func substituteGutter(_ line: String) -> String {
         let pad = String(repeating: " ", count: line.indentWidth)
         let body = line.drop { $0 == " " }
         guard let first = body.first else { return line }
 
+        let rest = body.dropFirst().drop { $0 == " " }
+
         if quoteGlyphs.contains(first) {
-            let rest = body.dropFirst().drop { $0 == " " }
             return rest.isEmpty ? pad + ">" : pad + "> " + rest
         }
         if let replacement = markers[first] {
             // Recurse, because a response marker is chrome and what follows it may
             // be a real gutter: `⏺ ▎ quoted` leaves the `▎` behind otherwise, which
-            // a second pass then converts — an idempotency break (fixture 18).
+            // a second pass then converts — an idempotency break (fixture 17).
             // Quote gutters deliberately do not recurse: `> > x` is a nested
             // blockquote, and collapsing it would drop a level.
-            return pad + replacement + substituteGutter(String(body.dropFirst().drop { $0 == " " }))
+            return pad + replacement + substituteGutter(String(rest))
         }
         return line
     }

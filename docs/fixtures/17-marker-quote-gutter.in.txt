@@ -1,0 +1,5 @@
+⏺ ▎ Constructor injection fails ArC augmentation on these — AbstractFacade has no no-args ctor for it to synthesize from — and the Quarkus CDI reference discourages 
+  ▎ private injected members since they force reflection (src/main: 265 package-private @Inject fields, 0 private). Leaving these as field injection unless you feel 
+  ▎ strongly.
+
+  Revert the working-tree change and post this?

@@ -33,21 +33,3 @@ Paste-ready for the ticket or the QA thread:
 >
 > Two separate mechanisms produce the same symptom and should not be folded into this one: /history/count ignores the region on every service including poi (AFDL-66743), and equals_ matched nothing on any
 > history endpoint before AFDL-66686 shipped.
-
-Cooked for 33s * done Thursday 4:18 PM
-
-> the latest CL version is deployed in UDEV
-
-Then the equals_ confounder is out, and per-service is the complete explanation for the five. Loren's matrix stands as written.
-
-Two follow-ons:
-
-Confirm the udl build separately. 66686 and 67404 are component-library; 66683 and 66691 are udl (466c108fd). The five-services finding doesn't depend on the udl side - it's CL's collection map - but the 400s Loren saw on those same five do. If UDEV's udl predates 466c108fd, the validation half of the matrix is testing the old GeographyUtils path even though the filtering half is current.
-
-Latest CL means AFDL-67404 is in, which constrains fixture-building. Writes now reject empty and out-of-bounds geometry with a 400, so QA cannot seed a negative-case record with POINT (200 10) or POLYGON EMPTY through POST /udl/<x>. Negative fixtures have to be in-bounds, valid geometry positioned outside the query polygon - which is the right shape for these tests anyway, since the question is whether the predicate excludes a non-matching record, not whether bad input is rejected.
-
-The open question is still which endpoint the matrix used. /history gives the clean four-filter / five-ignore split; /history/count would show poi failing negatives too, and that's AFDL-66743, not 66733.
-
-Baked for 17s * done Thursday 4:21 PM
-
-> the udl build version deployed in UDEV is the latest

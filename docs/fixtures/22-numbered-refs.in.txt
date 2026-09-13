@@ -102,10 +102,3 @@
 
   Net effect: 5 AC lines become 7, one is deleted as unverifiable, and the ticket stops claiming coverage of an endpoint that 406s in the IT harness. The two additions in ④ and ⑤ exist purely to stop QA filing the three-key check and the
   IllegalArgumentException catch as defects.
-
-✻ Sautéed for 48s · done 11:08 AM
-
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-❯ now AFDL-66686
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

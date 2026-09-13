@@ -16,7 +16,7 @@ enum Reformat {
     /// Slack in the forced-break test; absorbs prose that only approximates a column.
     static let breakTolerance = 8
     /// A cluster smaller than this is coincidence, not evidence of a wrap column.
-    /// Lowered to 2 for fixture 16 and put back once the lone-candidate fallback
+    /// Lowered to 2 for fixture 15 and put back once the lone-candidate fallback
     /// covered that case; the corpus passes at either value, so the constant has
     /// slack rather than sitting on a knife edge.
     static let minClusterLines = 3
@@ -43,8 +43,7 @@ enum Reformat {
     /// Gutter glyph → replacement of exactly the gutter's column width, so
     /// content keeps its column and every indent comparison still holds.
     static let markers: [Character: String] = [
-        "⏺": "  ", "●": "  ", "✻": "  ", "✽": "  ", "✶": "  ",
-        "⎿": "|_ "   // visible: "this is command output" survives the paste
+        "⏺": "  ", "●": "  "
     ]
 
     /// Reverses typographic substitution. Only characters with an unambiguous
@@ -58,11 +57,11 @@ enum Reformat {
         "\u{2192}": "->", "\u{2190}": "<-",      // → ←
         "\u{2264}": "<=", "\u{2265}": ">=",      // ≤ ≥
         "\u{00D7}": "x",                         // ×
-        "\u{00B7}": "*"                          // ·
+        "\u{00B7}": "-"                          // ·
     ]
 
     /// Gutters that mean "quoted", all normalizing to `> `.
-    static let quoteGlyphs: Set<Character> = ["▎", "┃", ">", "❯"]
+    static let quoteGlyphs: Set<Character> = ["▎", "┃", ">"]
     static let boxChars = Set("│┌├└┬┴┼─╭╰┏┗┣┃┐┤┘╮╯┓┛┫|")
 
     // MARK: - Entry point
@@ -87,7 +86,7 @@ enum Reformat {
 
         let width = estimateWidth(lines)                                // 5
         let joins = width.map { forcedBreaks(lines, width: $0) } ?? []  // 6
-        lines = performJoins(lines, at: Set(joins))
+        lines = performJoins(lines, at: Set(joins), width: width)
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
         // Membership is computed here, not earlier: joins and table conversion
@@ -187,8 +186,7 @@ private extension Reformat {
     /// it, while short lines (headers, labels, tails) outnumber wrapped ones in
     /// any structured document.
     static func estimateWidth(_ lines: [String]) -> Int? {
-        let lengths = lines.filter { !$0.trimmed.isEmpty && !isTable($0) && !isListingRow($0) }
-            .map(\.count)
+        let lengths = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }.map(\.count)
         guard lengths.count >= 2 else { return nil }
 
         var clusters: [[Int]] = []
@@ -251,13 +249,30 @@ private extension Reformat {
         return result
     }
 
-    static func performJoins(_ lines: [String], at joins: Set<Int>) -> [String] {
+    /// Whether the wrapper broke inside a single token rather than at a space.
+    ///
+    /// A word-wrapping renderer splits a token only when the token cannot fit a
+    /// line at all, so the two fragments together exceed `W` — which is the test.
+    /// Line length alone is not: a line can end at exactly `W` because the last
+    /// word happened to fit, and fixture 25 contains both cases at 208.
+    ///
+    /// Rejoining such a break with a space corrupts the token; a long URL is the
+    /// realistic instance, and the result is a dead link rather than a ragged one.
+    static func splitsAToken(_ a: String, _ b: String, width: Int?) -> Bool {
+        guard let width else { return false }
+        let tail = a.trimmedTrailing.split(separator: " ").last ?? ""
+        let head = b.trimmed.split(separator: " ").first ?? ""
+        return tail.count + head.count > width
+    }
+
+    static func performJoins(_ lines: [String], at joins: Set<Int>, width: Int?) -> [String] {
         guard !lines.isEmpty else { return lines }
         var result: [String] = []
         var current = lines[0]
         for i in 1..<lines.count {
             if joins.contains(i - 1) {
-                current = current.trimmedTrailing + " " + lines[i].trimmed
+                let glue = splitsAToken(current, lines[i], width: width) ? "" : " "
+                current = current.trimmedTrailing + glue + lines[i].trimmed
             } else {
                 result.append(current)
                 current = lines[i]
