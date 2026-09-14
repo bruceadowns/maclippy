@@ -35,8 +35,8 @@ install: release ## Build Release, replace ~/Applications copy, relaunch
 	@# Ask only if it is running: `tell application ... to quit` launches the app
 	@# in order to quit it, which leaves a process behind when it was not running.
 	@pgrep -x Maclippy >/dev/null && osascript -e 'tell application "Maclippy" to quit' || true
-	@# Swapping the bundle while the old process tears down makes the relaunch
-	@# fail with LaunchServices -600, so wait for the exit and force it if late.
+	@# Force the exit if the quit is late; the bundle must not be swapped while
+	@# the old process still holds it.
 	@for _ in $$(seq 1 50); do \
 		pgrep -x Maclippy >/dev/null || break; \
 		sleep 0.1; \
@@ -44,7 +44,9 @@ install: release ## Build Release, replace ~/Applications copy, relaunch
 	pkill -x Maclippy 2>/dev/null || true
 	rm -rf "$(INSTALL_DIR)/Maclippy.app"
 	cp -R "$(RELEASE_APP)" "$(INSTALL_DIR)/Maclippy.app"
-	open "$(INSTALL_DIR)/Maclippy.app"
+	@# -n launches outright rather than activating a record LaunchServices may
+	@# still hold for the bundle rm -rf just replaced, which answers -600.
+	open -n "$(INSTALL_DIR)/Maclippy.app"
 	@echo "Installed and launched $(INSTALL_DIR)/Maclippy.app"
 
 lint: ## Run SwiftLint --strict (brew install swiftlint)
