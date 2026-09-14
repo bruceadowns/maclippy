@@ -1,0 +1,1 @@
+The xdomain intake doesn't use Kafka's consumer-group machinery at all. It uses the raw client as a cursor-based reader over a log - the application owns the position, the partition, and the pace, and the broker is treated as durable storage rather than as a coordinator.

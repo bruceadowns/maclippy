@@ -1,0 +1,28 @@
+⏺ I can't fake the wrap — that's the unknown we're testing, and your terminal has to produce it. So here's the content, unwrapped. Have Claude Code emit it verbatim in a real session, then copy the rendered
+  stanza:
+
+  The collection map is the thing to read, and it sits at https://gitlab.bluestaq.com/core-platform/general/udl/-/blob/develop/code/component-library/bluestaq-udl-common-parent/bluestaq-udl-common/src/main/ja
+  va/com/bluestaq/udl/common/util/HistoryUtils.java?ref_type=heads&plain=1#L410-437 — the lookup happens before the predicate is evaluated, which is why the five unmapped collections behave identically across
+  all nine operators.
+
+  Compare that against the non-history path at https://gitlab.bluestaq.com/core-platform/general/udl/-/blob/develop/code/udl-api/src/main/java/com/bluestaq/udl/api/AbstractFacade.java#L722 and the asymmetry
+  is obvious: validation keys on the parameter name, application keys on the collection name, and nothing reconciles the two.
+
+  The short form is that a service can reject a malformed region with a 400 and then ignore a well-formed one, which reads as a per-predicate defect to anyone building a test matrix from the outside. It is
+  not. It is one missing entry in a static map, and the matrix will keep producing the same signature until that entry exists.
+
+  The first URL is 247 characters, so it exceeds any plausible terminal column and must be broken. The second is 118 and should ride inside a normal wrap — a control in the same paste, showing what an
+  unbroken URL looks like through the same pipeline.
+
+  What to look for when you copy it back:
+
+  - Where the long URL breaks. Mid-token at the column is the corrupting case. If Claude Code breaks at a / or ? or # instead, the hazard is narrower than I thought — still a join inserting a space into a
+    URL, but at a boundary that's easier to detect.
+  - Whether it breaks at all, or just overflows the column. If it overflows, that single line becomes a length outlier and may hijack W — a different bug from the one I was chasing, and one the 25%-exceed
+    check may or may not absorb.
+
+  Three paragraphs, each several lines at the column, so the cluster will be well-populated and W measurable rather than falling through to the lone-candidate path. That keeps the fixture about the URL and
+  not about the estimator.
+
+  One caution on the round trip: if you ask Claude Code to reproduce this, check the URLs came back character-identical before capturing. A model retyping a 247-character URL is exactly the transcription
+  problem I already introduced into fixtures 23 and 24.
