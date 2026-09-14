@@ -1305,8 +1305,23 @@ fires on any sample.
   literal backticks. It would help the minority and disfigure the majority.
 - **ASCII art skews by a few columns** when it contains expanding glyphs (§7).
   Accepted; a fix means a new block kind and a detector with no supporting data.
+- **Aligned columns are unprotected on the join path too** — §7 records only the
+  flatten side. A borderless table, fields lined up by padding with no `|` or box
+  glyph, matches no predicate in §5, so it is prose, and only the forced-break
+  arithmetic keeps it intact. A narrow block is safe because it is short; rows
+  reaching `W - tolerance` would be joined into one line. The signal, should one
+  ever be needed, is that field *start* columns coincide across consecutive lines
+  — a run-based test misses a row whose gap is a single space — and it costs no
+  constant. Not added: no paste has exhibited the wide case, and §8 refuses a
+  rule for an unobserved shape.
 - **Character count is not display width** (§6.1). Wide characters — CJK, most
   emoji — take two terminal columns but count as one. No fixture is affected; a
   `wcwidth` table is the fix if one ever is.
+- **A status line's `·` flattens to `-`**, where it read as a separator and now
+  reads as a range (`1m 30s - done`). Out of domain by §0 — the stanza ends at
+  that line — so it is recorded, not fixed. Exempting it would mean exempting the
+  whole chrome category (`… +38 lines (ctrl+o to expand)`, the `⏵⏵` mode footer's
+  `·` and `←`), which is the detection the §0 prune deleted; and no fixture
+  carries the glyph, so `make check` cannot tell the exemption right from wrong.
 - Tabs are left as-is; no sample contained them. If tab-indented input appears,
   dedent's common-prefix arithmetic needs revisiting for mixed tabs and spaces.
