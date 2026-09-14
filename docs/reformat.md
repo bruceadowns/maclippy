@@ -89,6 +89,17 @@ status line, so ablating the `·` → `*` row changed no output — and the firs
 in-domain stanza carrying a body `·` then broke on it (fixture 24). "Removing it
 changes no output" is a statement about the corpus, never about the rule.
 
+A caution in the other direction, and the same one: a sample can come out clean
+because it is *inside* the domain, not because the rules generalize. Eight
+in-domain stanzas were absorbed without a rule change in one validation pass —
+two box tables in one paste, embedded Java, quote gutters, a stanza selected
+below its marker — and none became a fixture, by the bar in
+[`fixtures/README.md`](fixtures/README.md). That says the rules hold across
+*shape*, with provenance held fixed by the constraint above. "It was absorbed"
+is a statement about the corpus, never about the rules' reach. §8 reads
+absorption as the healthy pattern, which it is; it is not evidence of coverage
+the domain was narrowed to stop buying.
+
 **What this deleted.** Four fixtures went out of domain along with the rules they
 were the only evidence for: a `⎿` width calibration, the `❯` prompt gutter and
 the positional fold that inferred its extent, a listing-row exclusion from the
