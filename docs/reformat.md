@@ -529,14 +529,17 @@ corpus spans 93 to 232 (§8), so no constant is possible.
    ≤ **8**.
 3. Walk groups **highest first** and take the first that holds at least 3 lines
    *and* survives the exceed check below — not the group with the most lines.
-4. `W` = that group's maximum. If no group holds 2 lines, fall back to the
-   **highest** group that passed the exceed check, however few lines it has. A
-   paragraph wrapped *N* times leaves only *N-1* lines at the column, so a
-   paragraph wrapped exactly once can never form a group — and that is the most
-   ordinary paste there is (fixture 20). The fallback applies only when nothing
-   populated exists anywhere below, which is what separates a one-wrap paragraph
-   from a stray long line sitting above a real column: in fixture 1 a lone
-   120-character line loses to the 31-line column at 95, as it must.
+4. `W` = that group's maximum. When no group holds 3, fall back in descending
+   order of evidence: the **highest** group holding 2 that passed the exceed
+   check, and only if none does, the highest that passed it at all, however few
+   lines it has. A paragraph wrapped *N* times leaves only *N-1* lines at the
+   column, so a paragraph wrapped exactly once can never form a group — and that
+   is the most ordinary paste there is (fixture 20). A single wrapped list item
+   leaves two when a long token forces its first break early (fixture 26). Both
+   rungs apply only when nothing better-populated exists anywhere below, which is
+   what separates a real column from a stray long line sitting above one: in
+   fixture 1 a lone 120-character line loses to the 31-line column at 95, as it
+   must.
 
    What keeps this safe is `terminalPunctuation` (§6.3). The fallback's exposure
    is a long line followed by a short one, and when the long line ends a sentence
@@ -1076,7 +1079,7 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 5 | Risks + acceptance criteria; header abutting a list | 21 | short | 95 | 70–95, 16 lines (25) | 7 |
 | 6 | Status summary; column-0 hard wraps | 9 | filled | 187 | 181–187, 3 lines (6) | 3 |
 | 7 | Ticket draft; label headers, `---` rule, long paragraphs | 26 | filled | 232 | 216–232, 10 lines (16) | 10 |
-| 8 | Four bullets, one wrapped | 5 | filled | 223 (lone fallback) | 173–181, 2 lines (8) | 1 |
+| 8 | Four bullets, one wrapped | 5 | filled | 181 (pair fallback) | 173–181, 2 lines (8) | 1 |
 | 9 | Ticket draft; first line missing its indent | 29 | filled | 232 | 224–232, 8 lines (8) | 10 |
 | 10 | Summary + 21-row, 3-column box table with emoji cells | 9 prose (+21 table) | filled | 165 | 160–165, 3 lines (5) | 3 |
 | 11 | Push summary + `▎` quote-bar blocks | 17 | filled | 232 | 219–232, 8 lines (13) | 5 |
@@ -1090,10 +1093,11 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 19 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | filled | 174 | 162–174, 10 lines (12) | 10 |
 | 20 | One paragraph, wrapped exactly once | 2 | filled | 233 | 233, 1 line (lone fallback) | 1 |
 | 21 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | filled | 231 | 231, 1 line (lone fallback) | 1 |
-| 22 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks | 59 | filled | 237 | 214–237, 14 lines (10) | 4 |
+| 22 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks | 59 | filled | 238 | 214–237, 14 lines (10) | 4 |
 | 23 | Prose analysis wrapping a four-line Java method, plus a `▎` block | 25 prose (+4 code) | filled | 208 | 201–208, 9 lines (5) | 5 |
 | 24 | Spec discussion quoting a flatten rule — `·` and `→` inside body prose | 12 | filled | 208 | 201–208, 8 lines (5) | 8 |
 | 25 | A 231-character URL the wrapper split mid-token, a short URL inside a normal wrap as control, and a space break that lands on `W` by coincidence | 20 | filled | 208 | 200–208, 10 lines (6) | 10 |
+| 26 | One wrapped list item below an unwrapped 184-character paragraph; only two lines reach the column | 7 | short | 96 (pair fallback) | 93–96, 2 lines (3) | 3 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1104,11 +1108,12 @@ only proved.
 miss recorded here was fixture 12, which §0 put out of domain.
 
 **The `W` column is measured, not asserted** — it is what `estimateWidth` returns
-at stage 5, re-measured whenever the estimator changes. Every row was
-re-measured after the §0 prune. Row 8's `223` is *not* drift, though it was
-briefly mistaken for it: it is what the estimator returns with the cluster
-minimum at 3, which is the value in force. `W` is a function of the
-configuration, so re-measure the column rather than reasoning about it.
+at stage 5, re-measured whenever the estimator changes. Every row was re-measured
+after the §0 prune, and again after fixture 26 added the two-line rung: row 8
+moved from `223` to `181`, which is its real column, and row 22 from `237` to
+`238`, which was drift. Row 8 is the standing illustration that `W` is a function
+of the configuration — its `223` was called drift once when it was simply what the
+estimator then returned — so re-measure the column rather than reasoning about it.
 
 **Fixture 17's zero joins are not a miss.** Its width estimate is correct and
 every long line is a quote line, which §5.2 declines to unwrap; the four
@@ -1156,6 +1161,7 @@ argued about:
 | Wrapped cells (21) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
 | Token-split join (25) | join with a space, as before | fixture 25's URL gains a space mid-path and stops being a link — **load-bearing, no constant** |
 | `·` → `-` (24) | target `*` instead | fixture 24's body `·` becomes `*`, which reads as emphasis rather than a separator — **load-bearing, no constant** |
+| Two-line rung (26) | drop it, leaving the lone candidate | fixture 26 loses all 3 joins: the unwrapped 184-character paragraph above the list is taken for the column — **load-bearing, and adds no constant** |
 | Code block exemption (23) | delete it | the em dash in fixture 23's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
 All three survive, but the audit did find one redundancy: fixture 15's lowering
@@ -1193,6 +1199,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 22 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 | 23 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 | 24 | `·` flattens to `-`, not `*`. Every earlier `·` sat on a status line, so the wrong target looked harmless and its ablation looked inert — both because the corpus held no in-domain instance. A stanza discussing the rule supplied one. `*` is markup where `·` was inert; `-` is inert and the same width |
+| 26 | The lone-candidate fallback needs a rung above it — two lines agreeing on a column beat one line agreeing with nothing. A list item wrapped four times left only two lines at the column, because a long backticked token forced its first break early and the tail is short, so an unwrapped 184-character paragraph above it won the estimate and nothing joined. The same item joins as soon as a second item follows it, which is what shows the estimate rather than the join rules to be at fault |
 | 25 | A break inside a token rejoins with no separator. The wrapper splits a token only when it cannot fit a line, so the fragments sum to more than `W` — the test is the definition, not a heuristic. Length at `W` is *not* the test: the fixture holds a coincidental space break at the same length |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
@@ -1251,7 +1258,7 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs the spread of a short-lined stanza |
-| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
+| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, falling back to the highest 2-line group and then to a lone candidate when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
