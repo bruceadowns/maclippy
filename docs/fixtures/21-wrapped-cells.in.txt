@@ -1,0 +1,16 @@
+  Not version-controlled ⚠️
+
+  .gitignore:39 ignores flowtasks/, and .gitignore:2 in .mr-sessions/ ignores everything. So these exist only on this machine:
+
+  ┌──────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                             File                             │                                                                     Consumer-group content at risk                                                                      │
+  ├──────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │                                                              │ The liveness-obligation analysis (the actual max.poll.interval.ms: 100000 / session.timeout.ms: 100000 / max.poll.records: 10000 numbers and why they're inert under    │
+  │ flowtasks/.../research/2026-08-20-pure-port-pivot-handoff.md │ assign()); the four-pattern estate survey with exact sites and the subscribe()-that-assigns naming trap; the owned-cursor-to-leased-partition framing and the three     │
+  │                                                              │ benefits                                                                                                                                                                │
+  ├──────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ .mr-sessions/fix-docstaq-106/round-01/spec.md                │ The code-grounded findings underpinning the keying decision — DeleteAny field set, insert-only replay behavior, the host-local journal                                  │
+  └──────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  The liveness numbers are the piece I'd least want to lose. They're the concrete argument for why the flip needs its own change rather than a config tweak, they're not in either DRP, and re-deriving them means another pass through
+  KafkaCache and KafkaObjectConsumer.

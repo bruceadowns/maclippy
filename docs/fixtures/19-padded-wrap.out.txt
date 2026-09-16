@@ -1,0 +1,33 @@
+Yes on both counts - but the estate check changes the shape of the argument, and not in the direction I expected.
+
+The right framing for "canonical"
+
+Don't lead with it. On its own it's an appeal to authority and an architect will answer "ours works." They're right.
+
+Lead with the lease benefits - capacity as configuration, automatic failover, broker-side lag. "Canonical" is then the argument for why those benefits are cheap: you're not building failover, rebalance, offset retention, or lag metrics. You're deleting the code that prevented you from having them. The ecosystem already implements all four, tested by everyone using Kafka.
+
+The concrete, checkable version is operational tooling. Today "how far behind is xdomain ingest?" means reading a MongoDB document written by the application - and a stalled consumer is indistinguishable from an idle one. After: kafka-consumer-groups.sh --describe. That's a demonstrable capability difference, and it's the thing AC-30's alerting structurally depends on.
+
+The risk version is worth as much to an architect: bespoke consumption means every failure mode is novel and unshared. Canonical means when it breaks at 3am the symptom is searchable, the tooling exists, and someone else has already hit it.
+
+What I found checking the siblings
+
+I expected to hand you a consistency argument. It's the opposite:
+
+udlhistoryconsumer/KafkaServerCluster.java:99   consumer.assign(topics);
+udlhistoryconsumer/KafkaCache.java:102          // consumer.subscribe(Arrays.asList(topic));
+xdomainproducer/XDPProcessor.java:190           consumer.assign(Arrays.asList(topicPartition));
+
+The cursor pattern is the house pattern, not a udl quirk. And udlhistoryconsumer carries the same commented-out subscribe() line as udl - this propagated by copy-paste, including the dead code and the hesitation.
+
+So xdomainconsumer would be the first service in the estate to consume canonically. That's not a consistency play, and you shouldn't pitch it as one.
+
+But it's a stronger argument in a different direction: a pattern that spreads by copying only stops when someone breaks the chain, and this is the right place to break it - the only extraction with a working reference implementation to compare against and a per-topic rollback path. Do it here and the pattern is available to copy next time. Skip it and the next service inherits the cursor too.
+
+It also means this DRP sets precedent, which is an independent argument for the keying and offsets ADR existing at all.
+
+One trap that falls out of this
+
+udlhistoryconsumer has a wrapper method named subscribe() that internally calls assign() (KafkaCache.subscribe(...) at KafkaObservationConsumer.java:184). If the new service is "patterned after the siblings," a developer can reuse that helper, see subscribe at the call site, and reasonably believe they've joined a group when they haven't - no group, no failover, no lag, and the offset mirror quietly meaningless.
+
+Worth a line in the intake step: the group is joined via the Kafka client's own subscribe, not via any inherited helper of that name.
