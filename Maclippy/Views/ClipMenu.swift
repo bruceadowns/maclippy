@@ -48,7 +48,10 @@ struct ClipMenu: View {
     @ViewBuilder
     private func menuLabel(for clip: Clip) -> some View {
         if clip.customLabel != nil {
+            // macOS 27+ sets NSMenuItem.image from a Label but won't draw it
+            // unless the style asks for the icon; a bare Label comes out title-only.
             Label(label(for: clip), systemImage: "key.fill")
+                .labelStyle(.titleAndIcon)
         } else {
             Text(label(for: clip))
         }
