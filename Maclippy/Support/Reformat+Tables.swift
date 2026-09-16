@@ -39,16 +39,11 @@ extension Reformat {
             rows = segments.flatMap { $0 }
         }
 
-        // A row with nothing in any cell carries nothing. Dropping it before the
-        // header is chosen is what §5.1's "first surviving row" means: the source
-        // had no header, and Markdown has no headerless table.
-        let populated = rows.filter { row in row.contains { !$0.isEmpty } }
-
-        guard let first = populated.first else { return block }
-        guard populated.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
+        guard let first = rows.first else { return block }
+        guard rows.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
 
         let delimiter = Array(repeating: "---", count: first.count)
-        return ([first, delimiter] + populated.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
+        return ([first, delimiter] + rows.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
     }
 
     /// Rule rows with a data row on both sides. Two of them prove the table rules
@@ -89,11 +84,7 @@ extension Reformat {
     /// delimiter row on every run.
     static func isRuleRow(_ line: String) -> Bool {
         guard isTable(line) else { return false }
-        // The horizontal run is what makes it a rule. Without this a row whose
-        // cells are all empty is nothing but borders and spaces, and splitting on
-        // it drops the row and promotes the next one to header.
-        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }),
-           line.contains("\u{2500}") || line.contains("-") { return true }
+        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }) { return true }
         let c = cells(line)
         return !c.isEmpty && c.allSatisfy { cell in
             let core = cell.drop { $0 == ":" }.reversed().drop { $0 == ":" }
