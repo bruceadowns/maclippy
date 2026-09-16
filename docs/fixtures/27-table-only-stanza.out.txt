@@ -1,7 +1,6 @@
 Branch two-line-wrap-cluster, three commits, nothing pushed.
 
-|  |  |
-| --- | --- |
 | eba6c28 | Bump build number to 7 |
+| --- | --- |
 | 5f94242 | README drift from the §0 prune |
 | 8f1d17c | The fix, fixture 26, spec updates |

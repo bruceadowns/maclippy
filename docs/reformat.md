@@ -397,12 +397,15 @@ destination.
 
 1. **Separator rows are dropped**, in *both* dialects:
    - box rules — any row that is nothing but box glyphs and whitespace **and
-     carries a horizontal run** (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`). The run is
-     what makes it a rule: a row whose cells are all empty (`│   │      │`) is
-     borders and spaces too, and without the run it splits the table there,
-     drops the row, and promotes the row below it to header (fixture 27);
+     carries a horizontal run** (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`);
    - **Markdown delimiter rows** — every cell matching `:?-+:?`
      (`| --- | --- |`, `| :--- | ---: |`).
+
+   The horizontal run is what distinguishes a rule from a row whose cells are
+   all empty (`│   │      │`), which is borders and spaces too. That row is
+   **data carrying nothing**, and it is dropped at step 4 rather than split on
+   here — splitting would also bound a logical row, which is wrong wherever a
+   segment holds wrapped cells (§5.1, the fixture 21 shape).
 
    The second is not optional, and omitting it makes the stage **destructive on
    repeat**. A converted Markdown row starts and ends with `|`, which is in the
@@ -414,8 +417,12 @@ destination.
 2. **Remaining rows split on vertical rules** (`│`, `┃`, `|`). The empty cells
    the outer border produces are discarded; each cell is trimmed of its padding.
 3. **`|` in cell content is escaped** as `\|`.
-4. **The first surviving row becomes the header**, whether or not a separator
-   followed it in the source — Markdown has no headerless table.
+4. **Rows with nothing in any cell are dropped**, and **the first surviving row
+   becomes the header**, whether or not a separator followed it in the source —
+   Markdown has no headerless table. A source table with a blank header row
+   therefore loses it and promotes its first data row; fixture 27 is that table,
+   and the alternative — emitting `|  |  |` to keep the row count — was tried and
+   rejected as inventing a header cell the source never had.
 5. **A `| --- |` delimiter row is emitted per column.** Alignment is *not*
    inferred from source padding: box renderers centre-pad headers regardless of
    intent, so the padding carries no signal, and Markdown alignment is cosmetic.
@@ -1176,7 +1183,8 @@ argued about:
 | Token-split join (25) | join with a space, as before | fixture 25's URL gains a space mid-path and stops being a link — **load-bearing, no constant** |
 | `·` → `-` (24) | target `*` instead | fixture 24's body `·` becomes `*`, which reads as emphasis rather than a separator — **load-bearing, no constant** |
 | Table exemption (27) | delete it | fixture 27 returns byte-identical, marker included — **load-bearing, and adds no constant** |
-| Horizontal run in a rule row (27) | accept borders-and-spaces alone | fixture 27's blank header row is split on and dropped, and its first commit becomes the header — **load-bearing, and adds no constant** |
+| Blank-row drop (27) | keep the row | fixture 27 emits a `\|  \|  \|` header — **load-bearing, and adds no constant** |
+| Horizontal run in a rule row (27) | accept borders-and-spaces alone | **no corpus witness.** With the run required, a blank row reaches step 4 as data and is dropped there; without it the row is consumed as a separator and the output is identical. The two are one change, not two rules: what the run buys is that a blank row inside a wrapped-cell segment does not bound a logical row, and no fixture holds that shape |
 | Two-line rung (26) | drop it, leaving the lone candidate | fixture 26 loses all 3 joins: the unwrapped 184-character paragraph above the list is taken for the column — **load-bearing, and adds no constant** |
 | Code block exemption (23) | delete it | the em dash in fixture 23's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
@@ -1215,7 +1223,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 22 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 | 23 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 | 24 | `·` flattens to `-`, not `*`. Every earlier `·` sat on a status line, so the wrong target looked harmless and its ablation looked inert — both because the corpus held no in-domain instance. A stanza discussing the rule supplied one. `*` is markup where `·` was inert; `-` is inert and the same width |
-| 27 | Two, from one paste. A box table means the document is not code, which has to be said outright because table rows are masked from the words-per-line measurement — a stanza that is mostly table starves the mean and the guardrail eats the whole paste, marker included. And a rule row needs a horizontal run: an all-blank row is borders and spaces, so it was split on, dropped, and the row beneath it promoted to header |
+| 27 | Two, from one paste. A box table means the document is not code, which has to be said outright because table rows are masked from the words-per-line measurement — a stanza that is mostly table starves the mean and the guardrail eats the whole paste, marker included. And a blank row is data carrying nothing, dropped at step 4, rather than a separator to split on — same output here, but splitting bounds a logical row and a wrapped-cell segment cannot afford that |
 | 26 | The lone-candidate fallback needs a rung above it — two lines agreeing on a column beat one line agreeing with nothing. A list item wrapped four times left only two lines at the column, because a long backticked token forced its first break early and the tail is short, so an unwrapped 184-character paragraph above it won the estimate and nothing joined. The same item joins as soon as a second item follows it, which is what shows the estimate rather than the join rules to be at fault |
 | 25 | A break inside a token rejoins with no separator. The wrapper splits a token only when it cannot fit a line, so the fragments sum to more than `W` — the test is the definition, not a heuristic. Length at `W` is *not* the test: the fixture holds a coincidental space break at the same length |
 

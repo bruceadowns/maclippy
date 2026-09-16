@@ -39,11 +39,16 @@ extension Reformat {
             rows = segments.flatMap { $0 }
         }
 
-        guard let first = rows.first else { return block }
-        guard rows.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
+        // A row with nothing in any cell carries nothing. Dropping it before the
+        // header is chosen is what §5.1's "first surviving row" means: the source
+        // had no header, and Markdown has no headerless table.
+        let populated = rows.filter { row in row.contains { !$0.isEmpty } }
+
+        guard let first = populated.first else { return block }
+        guard populated.allSatisfy({ $0.count == first.count }) else { return block }  // ragged: bail out
 
         let delimiter = Array(repeating: "---", count: first.count)
-        return ([first, delimiter] + rows.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
+        return ([first, delimiter] + populated.dropFirst()).map { "| " + $0.joined(separator: " | ") + " |" }
     }
 
     /// Rule rows with a data row on both sides. Two of them prove the table rules
