@@ -396,8 +396,11 @@ destination.
    Every real table carries a rule: `├─┼─┤`, `┌─┬─┐`, or `| --- |`.
 
 1. **Separator rows are dropped**, in *both* dialects:
-   - box rules — any row that is nothing but box glyphs and whitespace
-     (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`);
+   - box rules — any row that is nothing but box glyphs and whitespace **and
+     carries a horizontal run** (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`). The run is
+     what makes it a rule: a row whose cells are all empty (`│   │      │`) is
+     borders and spaces too, and without the run it splits the table there,
+     drops the row, and promotes the row below it to header (fixture 27);
    - **Markdown delimiter rows** — every cell matching `:?-+:?`
      (`| --- | --- |`, `| :--- | ---: |`).
 
@@ -567,8 +570,18 @@ The gate is a single document-level measurement, and it disables the **whole
 pipeline**, not just unwrapping:
 
 ```
+contains a rule row (§5.1)                      ->   never code
 mean(words per non-blank, non-table line) < 8   ->   return the input unchanged
 ```
+
+The table exemption is not a softening of the gate. A box table is something a
+terminal drew and source code does not contain one, so its presence settles the
+question the mean is trying to answer. It has to be stated separately because
+table rows are *masked* from the measurement — the same "not unwrapped, therefore
+not evidence" mistake that quote lines made at fixture 18 — which leaves a stanza
+that is mostly table with almost nothing to measure. Fixture 27 is one prose line
+above a nine-row table: the mean is 6.0 over that single line and the whole paste
+came back byte-identical, marker included.
 
 Reformat does not reformat code. Dedenting a pasted method or flattening an em
 dash inside a comment is still an edit to source, so once the text is judged code
@@ -1098,6 +1111,7 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 24 | Spec discussion quoting a flatten rule — `·` and `→` inside body prose | 12 | filled | 208 | 201–208, 8 lines (5) | 8 |
 | 25 | A 231-character URL the wrapper split mid-token, a short URL inside a normal wrap as control, and a space break that lands on `W` by coincidence | 20 | filled | 208 | 200–208, 10 lines (6) | 10 |
 | 26 | One wrapped list item below an unwrapped 184-character paragraph; only two lines reach the column | 7 | short | 96 (pair fallback) | 93–96, 2 lines (3) | 3 |
+| 27 | One prose line above a box table with an all-blank header row | 1 prose (+9 table) | — | none (one measurable line) | no estimate | 0 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1161,6 +1175,8 @@ argued about:
 | Wrapped cells (21) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
 | Token-split join (25) | join with a space, as before | fixture 25's URL gains a space mid-path and stops being a link — **load-bearing, no constant** |
 | `·` → `-` (24) | target `*` instead | fixture 24's body `·` becomes `*`, which reads as emphasis rather than a separator — **load-bearing, no constant** |
+| Table exemption (27) | delete it | fixture 27 returns byte-identical, marker included — **load-bearing, and adds no constant** |
+| Horizontal run in a rule row (27) | accept borders-and-spaces alone | fixture 27's blank header row is split on and dropped, and its first commit becomes the header — **load-bearing, and adds no constant** |
 | Two-line rung (26) | drop it, leaving the lone candidate | fixture 26 loses all 3 joins: the unwrapped 184-character paragraph above the list is taken for the column — **load-bearing, and adds no constant** |
 | Code block exemption (23) | delete it | the em dash in fixture 23's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
@@ -1199,6 +1215,7 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 22 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 | 23 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 | 24 | `·` flattens to `-`, not `*`. Every earlier `·` sat on a status line, so the wrong target looked harmless and its ablation looked inert — both because the corpus held no in-domain instance. A stanza discussing the rule supplied one. `*` is markup where `·` was inert; `-` is inert and the same width |
+| 27 | Two, from one paste. A box table means the document is not code, which has to be said outright because table rows are masked from the words-per-line measurement — a stanza that is mostly table starves the mean and the guardrail eats the whole paste, marker included. And a rule row needs a horizontal run: an all-blank row is borders and spaces, so it was split on, dropped, and the row beneath it promoted to header |
 | 26 | The lone-candidate fallback needs a rung above it — two lines agreeing on a column beat one line agreeing with nothing. A list item wrapped four times left only two lines at the column, because a long backticked token forced its first break early and the tail is short, so an unwrapped 184-character paragraph above it won the estimate and nothing joined. The same item joins as soon as a second item follows it, which is what shows the estimate rather than the join rules to be at fault |
 | 25 | A break inside a token rejoins with no separator. The wrapper splits a token only when it cannot fit a line, so the fragments sum to more than `W` — the test is the definition, not a heuristic. Length at `W` is *not* the test: the fixture holds a coincidental space break at the same length |
 

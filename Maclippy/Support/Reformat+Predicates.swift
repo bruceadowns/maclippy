@@ -47,6 +47,10 @@ extension Reformat {
     /// prose and it is evidence the document is prose — excluding them made a
     /// mostly-quoted paste read as code and skipped the pipeline entirely.
     static func isCode(_ lines: [String]) -> Bool {
+        // A box table is something a terminal drew, never source. Its rows are
+        // masked from the measurement below, so a stanza that is mostly table has
+        // almost nothing left to measure and starves the mean.
+        guard !lines.contains(where: isRuleRow) else { return false }
         let measurable = lines.filter { !$0.trimmed.isEmpty && !isTable($0) }
         guard !measurable.isEmpty else { return true }
         let words = measurable.reduce(0) { $0 + $1.split(separator: " ").count }

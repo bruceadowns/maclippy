@@ -84,7 +84,11 @@ extension Reformat {
     /// delimiter row on every run.
     static func isRuleRow(_ line: String) -> Bool {
         guard isTable(line) else { return false }
-        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }) { return true }
+        // The horizontal run is what makes it a rule. Without this a row whose
+        // cells are all empty is nothing but borders and spaces, and splitting on
+        // it drops the row and promotes the next one to header.
+        if line.allSatisfy({ boxChars.contains($0) || $0.isWhitespace }),
+           line.contains("\u{2500}") || line.contains("-") { return true }
         let c = cells(line)
         return !c.isEmpty && c.allSatisfy { cell in
             let core = cell.drop { $0 == ":" }.reversed().drop { $0 == ":" }

@@ -49,7 +49,8 @@ newline, a paragraph wrapped exactly once, a table whose cells wrap across three
 physical rows and sit vertically centered, a Java method embedded in prose, a
 `·` in body prose where every earlier one sat on a status line, a URL the
 wrapper split mid-token, an already-reformatted transcript fed straight back in,
-and a lone wrapped list item whose column only two lines reach.
+a lone wrapped list item whose column only two lines reach, and a stanza that is
+one line of prose above a table.
 
 Tool calls, tool results, prompts and diff views are **not** here. §0 puts them
 out of domain; the fixtures that carried them were pruned along with the rules
