@@ -204,21 +204,25 @@ private extension Reformat {
         // `clusters` is already ordered highest-first: it is built by walking the
         // distinct lengths downward, so each new cluster holds smaller values.
         var lonely: Int?
+        var pair: Int?
         for cluster in clusters {
             guard let hi = cluster.first, let lo = cluster.last else { continue }
             guard Double(lengths.filter { $0 > hi }.count)
                 <= maxExceedingW * Double(lengths.count) else { continue }
-            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else {
-                lonely = lonely ?? hi   // highest-first, so the first one seen is the highest
+            let population = lengths.filter { $0 >= lo && $0 <= hi }.count
+            guard population >= minClusterLines else {
+                // Highest-first, so the first one seen at each rung is the highest.
+                if population >= 2 { pair = pair ?? hi } else { lonely = lonely ?? hi }
                 continue
             }
             return hi
         }
         // A paragraph wrapped N times puts only N-1 lines at the column, so a
-        // single wrap can never form a cluster. Trust the lone candidate only when
-        // no populated one exists anywhere below it — that is what separates the
-        // one-wrap paragraph from a stray long line above a real column.
-        return lonely
+        // single wrap can never form a cluster. Fall back in descending order of
+        // evidence — two lines agreeing on a column beat one line agreeing with
+        // nothing — which is what separates a real column from a stray long line
+        // sitting above it.
+        return pair ?? lonely
     }
 
     // MARK: - Stage 6 — unwrapping (§6.2, §6.3)
