@@ -38,24 +38,20 @@ a `| --- |` row on every run.
 
 ## What they cover
 
-Most earned a place by breaking a rule that reasoning had not predicted; §8 of
-the spec records which, including the three that moved nothing. Between them
-they cover terminal wrapping at columns from 93 to 242, authored prose that only
-approximates a column, box-drawing tables, quote-bar gutters, ALL-CAPS and
-label-style headers, nested and flush-continued lists, emoji in table cells, a
-first line that lost its indent to the selection, a response marker stacked on
-top of a quote gutter, a wrap that arrived as 183 interior spaces instead of a
-newline, a paragraph wrapped exactly once, a table whose cells wrap across three
-physical rows and sit vertically centered, a Java method embedded in prose, a
-`·` in body prose where every earlier one sat on a status line, a URL the
-wrapper split mid-token, an already-reformatted transcript fed straight back in,
+Each one earned its place by breaking a rule that reasoning had not predicted;
+§8 of the spec records which. Between them they cover terminal wrapping at
+columns from 93 to 232, authored prose that only approximates a column,
+box-drawing tables, quote-bar gutters, ALL-CAPS and label-style headers, nested
+and flush-continued lists, emoji in table cells, a first line that lost its
+indent to the selection, a response marker stacked on top of a quote gutter, and
+a wrap that arrived as 183 interior spaces instead of a newline, a
+paragraph wrapped exactly once, a table whose cells wrap across three physical
+rows and sit vertically centered, a prompt bracketed by rules with no blank line
+to end it, a Java method embedded in prose, a `·` in body prose where every earlier one sat
+on a status line, a URL the wrapper split mid-token, a diff view whose numbered rows carry a
+wrap column of their own, a tool result holding indented Java behind its gutter,
 a lone wrapped list item whose column only two lines reach, and a stanza that is
 one line of prose above a table.
-
-Tool calls, tool results, prompts and diff views are **not** here. §0 puts them
-out of domain; the fixtures that carried them were pruned along with the rules
-they had forced, so such a paste measures nothing and the missing shape is not a
-gap to fill.
 
 There is no *whole-document* code fixture. Reformat leaves such a paste
 byte-identical (§6.1), so the pair would be a file diffed against itself — the
