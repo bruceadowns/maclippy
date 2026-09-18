@@ -506,7 +506,7 @@ already do.
 
 Greedy wrappers break a line only when the next word will not fit, so the
 break-was-forced question needs the column. It is estimated per clipboard — the
-corpus spans 93 to 232 (§8), so no constant is possible.
+corpus spans 93 to 242 (§8), so no constant is possible.
 
 1. Collect lengths of non-blank, non-table lines, measured in **characters** —
    Swift's `String.count`, never `utf8.count`. `—`, `§` and box-drawing glyphs
@@ -1090,7 +1090,7 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 19 | Long argument; two rows where the wrap arrived as 183 interior spaces, aligned `file:line` listings | 28 | filled | 174 | 162–174, 10 lines (12) | 10 |
 | 20 | One paragraph, wrapped exactly once | 2 | filled | 233 | 233, 1 line (lone fallback) | 1 |
 | 21 | 2-column box table whose cells wrap and are vertically centered, 9 rows for 2 logical | 4 prose (+9 table) | filled | 231 | 231, 1 line (lone fallback) | 1 |
-| 22 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks | 59 | filled | 237 | 214–237, 14 lines (10) | 4 |
+| 22 | Ticket-edit sheet: `①`–`⑯` reference labels, `▎` blocks | 59 | filled | 238 | 214–237, 14 lines (10) | 4 |
 | 23 | Prose analysis wrapping a four-line Java method, plus a `▎` block | 25 prose (+4 code) | filled | 208 | 201–208, 9 lines (5) | 5 |
 | 24 | Spec discussion quoting a flatten rule — `·` and `→` inside body prose | 12 | filled | 208 | 201–208, 8 lines (5) | 8 |
 | 25 | A 231-character URL the wrapper split mid-token, a short URL inside a normal wrap as control, and a space break that lands on `W` by coincidence | 20 | filled | 208 | 200–208, 10 lines (6) | 10 |
@@ -1105,7 +1105,8 @@ miss recorded here was fixture 12, which §0 put out of domain.
 
 **The `W` column is measured, not asserted** — it is what `estimateWidth` returns
 at stage 5, re-measured whenever the estimator changes. Every row was
-re-measured after the §0 prune. Row 8's `223` is *not* drift, though it was
+re-measured after the §0 prune; row 22 was missed and read `237` against a
+measured `238`. Row 8's `223` is *not* drift, though it was
 briefly mistaken for it: it is what the estimator returns with the cluster
 minimum at 3, which is the value in force. `W` is a function of the
 configuration, so re-measure the column rather than reasoning about it.
