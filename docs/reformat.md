@@ -267,6 +267,7 @@ guardrail live in `Reformat+Predicates.swift`.
 | 6 | Unwrap forced breaks | §6.2 |
 | 7 | Dedent by common leading whitespace | **after** unwrap — see below |
 | 8 | Convert box-drawing tables to Markdown | §5.1 |
+| 8b | Emit a space-aligned block as a list | §6.3.1; at the block's lead-in indent |
 | 9 | Flatten punctuation | §7 flatten table; an embedded code block is exempt (§6.1) |
 | 10 | Collapse any run of blank lines to 1 | whitespace-only counts as blank |
 | 11 | Trim leading/trailing blank lines | output always ends with exactly one line feed |
@@ -367,9 +368,11 @@ dispatch on kind" earns its keep in a parser with ten block types, not in five
 line tests.
 
 The practical difference is small. A predicate cannot express "this region is
-one unit", but nothing here needs that: table conversion (§5.1) gathers its own
-run of adjacent rows at stage 8, and quote handling (§5.2) is per-line by
-design.
+one unit", and almost nothing here needs that: table conversion (§5.1) gathers
+its own run of adjacent rows at stage 8, and quote handling (§5.2) is per-line by
+design. The one exception is the space-aligned table of §6.3.1, which is a
+property of a *pair* of lines and cannot be reduced to a per-line test without
+blocking joins nothing witnesses.
 
 **Unrecognized content is prose**, where every join is still gated by the
 forced-break test (§6.2). That gate is necessary but **not sufficient** — bare
@@ -748,8 +751,11 @@ is the one thing this feature must never do.
 
 Nor can tuning save both: fixture 14's alignment runs reach **11** spaces and
 fixture 19's `file:line` listing uses 10 and 11. The two are indistinguishable by
-run length, so any threshold that spares the diff also spares the listing. The
-listing keeping alignment it does not need is the cheaper error.
+run length, so any threshold that spares the diff also spares the listing, and
+this stage leaves both alone. That is the right call *here* and not the last
+word: §6.3.1 separates them at stage 8b on a signal this stage cannot see — the
+listing has three aligned rows and the diff has one line — and fixture 19's
+listing reaches the output as a list.
 
 Interior runs across the corpus are 2–11 (alignment) and 183 (padding), so 32
 sits between them with room on both sides. It is absolute rather than a fraction
@@ -850,6 +856,7 @@ All must pass. Declared as a named table so each is individually testable.
 | `intoListItem` | the next line starts a list item |
 | `header` | either line is a header |
 | `terminalPunctuation` | the current line ends in `.` `?` `!` — **unless** the current line is inside a list item and the next is not, **or** the next line is itself ≥ `W - tolerance` |
+| `alignedRow` | the next line is a row of a space-aligned table (§6.3.1) |
 
 **`terminalPunctuation` is the highest-value guard.** It is what keeps sample 1's
 two `CALLERS` entries apart — 86 + `udl-aodr` = 95 > 85 would otherwise join two
@@ -911,6 +918,100 @@ either direction, nor broke idempotency:
   factor, because `intoListItem` and `header` already catch
   every case it would have. Four alternatives that between them permitted
   everything is a guard that guards nothing.
+
+### 6.3.1 Space-aligned tables
+
+A stanza often carries a borderless table the terminal drew with spaces: a label
+column padded out to a shared start column, each row's text wrapping beneath it.
+
+```
+    Baseline        patterned after udlhistoryconsumer, after secure-streaming-observation, or
+                    generated fresh from the Quarkus platform BOM
+    Logging         quarkus-logging-logback + logstash-logback-encoder, which is what udl's
+                    Splunk dashboards spath, versus Quarkus file or console logging, which the
+                    sibling uses and which produces nothing those dashboards can parse
+    Packaging       JAR for Ansible, or a container image
+```
+
+`isTable` cannot see this — no rules, no pipes, every line ordinary prose. The
+forced-break test then welds `Packaging` onto the end of the `Logging` row, and
+because the welded line is longer the next pass moves `W` and takes the row after
+it. The damage compounds and the output never reaches a fixed point, which is
+what makes this worse than an ordinary wrong join: fixture 28 is **not
+idempotent** without the guard.
+
+The signal is alignment, and no single line carries it. `padColumn` reports the
+column where a line's first interior run of 2+ spaces ends; two **adjacent**
+lines at the same indent reporting the same column are a table. Stage 6 refuses
+to join into either, and stage 8b rewrites the run as a list.
+
+**Two spaces is not a tuned threshold.** One space is word spacing; two or more
+is padding. The discrimination comes from corroboration between neighbours, not
+from the number — which is the difference between this and the per-line space
+test it replaced. That test blocked joins on 37 padded lines across the corpus
+where only 5 belong to a real block, and nothing witnessed the other 32.
+
+**Adjacency means different things at the two stages, and that is the point.**
+The stage 6 guard sees lines before any join, so rows separated by their own
+continuations are not paired there; fixture 28 is protected because it happens to
+contain one adjacent pair, `Packaging` / `Config surface`. Stage 8b sees them
+after §6.2 has folded every continuation into its row, so by then the rows *are*
+consecutive and the whole block converts. Fixture 29 is the case that shows it:
+its continuations wrap back to the left margin rather than to the pad column, so
+nothing pairs them before the join, and all four rows still convert after it.
+
+The residual gap is narrow — a block whose rows are separated after joining, which
+no paste has produced. Walking the continuations to pair distant rows was built
+and measured against the corpus: it changes no fixture in either direction, so it
+is not here.
+
+**This is the first guard that is a relation rather than a predicate.** §5 argues
+for per-line predicates over a block model and that argument still holds — but
+"these two lines are columns of one table" is irreducibly about a pair, and
+faking it per-line is what produced the unwitnessed 32.
+
+#### What stage 8b emits
+
+`- label - text`, one item per row, splitting each row at its pad column.
+Preserving the alignment was the earlier behavior and is not worth keeping: the
+padding is a terminal artifact and reaches Jira as ragged whitespace.
+
+**The list marker is load-bearing, not decoration.** Emitting `label - text`
+without it was measured and is **not idempotent**: stage 8b removes the very
+padding stage 6 reads, so the next pass sees ordinary prose and welds the rows
+back together. `isListStart` is what holds them apart, and it is the only thing
+doing that job.
+
+**A Markdown table was the other candidate, and its header slot rules it out.**
+Markdown has no headerless table, so the block's first row — plain data — becomes
+a column heading. Emitting `|  |  |` above it does not survive: `boxChars`
+contains `|`, so `isRuleRow` reads an all-blank pipe row as a rule, the split
+consumes it, and the first data row is promoted anyway. Making that work means
+requiring a rule row to contain a horizontal glyph — which is what `c25f521`
+built and `27a28a4` reverted for want of a witness. It was measured here as
+idempotent, but it also rewrites fixture 27, and a list needs none of it.
+
+**The list takes its lead-in's indent**, not the block's own and not column 0.
+The source indented those rows to set them apart from the line introducing them;
+a list marker already does that, so carrying the indent as well doubles up. It
+also keeps fixture 29's list off the 4-space depth where CommonMark stops
+reliably reading an indented `-` beneath a paragraph as a list. The lead-in is
+the nearest preceding non-blank line, which is 0 when the block opens a stanza.
+
+**Two rows are required, and that is what protects the padding worth keeping.**
+Three lines in the corpus still carry interior padding after Reformat: fixture
+14's side-by-side diff, which holds two columns on one line and must never be
+collapsed (§6.1.1); fixture 23's `return doc;` and its aligned trailing comment,
+which is source; and one lone row in fixture 29. All three are single padded
+lines with no twin. Dropping the two-row requirement to catch the third was
+measured: it mangles the diff into a list item and is **not idempotent**, and it
+turns the line of Java into `- return doc; - // untouched`. One stranded row is
+the cheaper error.
+
+Guards on `|` in a cell and on empty cells were written first and are not here.
+Ablation says the corpus passes without the pipe test, and `padColumn` only
+returns a column when a non-space follows the run, which makes an empty cell
+unreachable.
 
 ### 6.4 Dedent
 
@@ -1114,6 +1215,8 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 25 | A 231-character URL the wrapper split mid-token, a short URL inside a normal wrap as control, and a space break that lands on `W` by coincidence | 20 | filled | 208 | 200–208, 10 lines (6) | 10 |
 | 26 | One wrapped list item below an unwrapped 184-character paragraph; only two lines reach the column | 7 | short | 96 (pair fallback) | 93–96, 2 lines (3) | 3 |
 | 27 | One prose line above a box table with an all-blank header row | 1 prose (+9 table) | — | none (one measurable line) | no estimate | 0 |
+| 28 | Ticket draft whose middle carries a four-row space-aligned table, rows wrapping under their labels | 46 | filled | 96 | 81–96, 23 lines (15) | 19 |
+| 29 | Analysis stanza: a box table plus a space-aligned block whose rows wrap back to the left margin, not to the column | 40 prose (+9 table) | filled | 105 | 59–105, 30 lines (46) | 20 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1256,6 +1359,13 @@ quote blocks were added, a check of *which fixtures changed* passed while fixtur
 11 silently went from five joins to zero. Counting joins catches that; comparing
 file lists does not.
 
+The count is a line-count delta, so any stage that adds or drops a line skews it.
+Stage 8b is line-for-line and does not, but a box table drops its rule rows and
+does: fixture 29 reports 24 against a true join count of 20. Fixtures 19 and 28
+report their true counts, 10 and 19. The signal it exists
+for — a fixture quietly dropping to zero — still works; the absolute number has
+not meant only joins since stage 8 existed.
+
 **Run it twice on anything suspicious.** Three of the four defects found while
 writing this spec produced correct-looking first-pass output and only appeared on
 a second run — dedent ordering (§4), a collapsed wrap-width estimate (§6.1), and
@@ -1283,6 +1393,7 @@ The invariants worth checking by hand, should something look wrong:
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
+| Column padding run | 2 spaces | §6.3.1; one space is word spacing. Corroborated by an adjacent twin rather than tuned — every value 2–7 behaves identically on the corpus |
 | Max fraction exceeding `W` | 25% | above this the estimate is rejected and unwrapping is skipped (§6.1) |
 | Blank-run collapse | any run → 1 | see below |
 | Marker widths | §7 | |

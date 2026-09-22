@@ -111,3 +111,36 @@ extension StringProtocol {
     var trimmedTrailing: String { String(reversed().drop { $0 == " " || $0 == "\t" }.reversed()) }
     var indentWidth: Int { prefix { $0 == " " }.count }
 }
+
+// MARK: - Space-aligned tables (§6.3.1)
+
+extension Reformat {
+
+    /// Column a line pads to: the end of its first interior run of 2+ spaces.
+    static func padColumn(_ line: String) -> Int? {
+        let chars = Array(line)
+        var i = 0
+        while i < chars.count, chars[i] == " " { i += 1 }
+        while i < chars.count {
+            guard chars[i] == " " else { i += 1; continue }
+            var j = i
+            while j < chars.count, chars[j] == " " { j += 1 }
+            if j - i >= 2, j < chars.count { return j }
+            i = j
+        }
+        return nil
+    }
+
+    /// Rows of a table the terminal drew with spaces: one padded line is an
+    /// accident, two adjacent ones padding to the same column are alignment.
+    static func alignedRowStarts(_ lines: [String]) -> Set<Int> {
+        var starts: Set<Int> = []
+        for i in 0..<max(0, lines.count - 1) {
+            guard let col = padColumn(lines[i]), padColumn(lines[i + 1]) == col,
+                  lines[i].indentWidth == lines[i + 1].indentWidth else { continue }
+            starts.insert(i)
+            starts.insert(i + 1)
+        }
+        return starts
+    }
+}

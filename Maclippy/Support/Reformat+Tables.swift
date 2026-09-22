@@ -92,3 +92,48 @@ extension Reformat {
         }
     }
 }
+
+// MARK: - Stage 8b — space-aligned blocks → list (§6.3.1)
+
+extension Reformat {
+
+    /// Emits a run of aligned rows as a list at the run's own indent, as every
+    /// other stage keeps relative indentation. §6.3.1 covers why not a table.
+    static func convertAlignedBlocks(_ lines: [String]) -> [String] {
+        var result: [String] = []
+        var i = 0
+        while i < lines.count {
+            guard let (run, col) = alignedRun(lines, from: i), run > 1 else {
+                result.append(lines[i])
+                i += 1
+                continue
+            }
+            let pad = String(repeating: " ", count: leadInIndent(result))
+            result += lines[i..<(i + run)].map { row in
+                let chars = Array(row)
+                return pad + "- " + String(chars[..<col]).trimmed + " - " + String(chars[col...]).trimmed
+            }
+            i += run
+        }
+        return result
+    }
+
+    /// Indent of the line introducing the block. The block's own indent set it
+    /// apart from that line; a list carries its own marker and does not need to.
+    static func leadInIndent(_ emitted: [String]) -> Int {
+        emitted.last(where: { !$0.trimmed.isEmpty })?.indentWidth ?? 0
+    }
+
+    /// Length and pad column of the run of consecutive rows sharing one indent
+    /// and column.
+    static func alignedRun(_ lines: [String], from start: Int) -> (run: Int, col: Int)? {
+        guard let col = padColumn(lines[start]), !isTable(lines[start]) else { return nil }
+        let indent = lines[start].indentWidth
+        var end = start + 1
+        while end < lines.count, !isTable(lines[end]),
+              padColumn(lines[end]) == col, lines[end].indentWidth == indent {
+            end += 1
+        }
+        return (end - start, col)
+    }
+}

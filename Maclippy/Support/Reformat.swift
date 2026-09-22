@@ -89,6 +89,7 @@ enum Reformat {
         lines = performJoins(lines, at: Set(joins), width: width)
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
+        lines = convertAlignedBlocks(lines)                             // 8b
         // Membership is computed here, not earlier: joins and table conversion
         // both change the line count, so any index taken before them is stale.
         let code = codeBlockMembership(lines)
@@ -230,6 +231,7 @@ private extension Reformat {
     /// Indices `i` where line `i` should absorb line `i+1`.
     static func forcedBreaks(_ lines: [String], width: Int) -> [Int] {
         let inList = runMembership(lines, openedBy: startsListItem)
+        let rowStarts = alignedRowStarts(lines)
         var result: [Int] = []
 
         for i in 0..<max(0, lines.count - 1) {
@@ -238,6 +240,7 @@ private extension Reformat {
             guard !isTable(a), !isTable(b), !isQuote(a), !isQuote(b) else { continue }
             guard !startsListItem(b) else { continue }
             guard !isHeader(a), !isHeader(b) else { continue }
+            guard !rowStarts.contains(i + 1) else { continue }
 
             // A sentence end usually means the break was authored — unless we are
             // inside a list (siblings carry markers, so `startsListItem` already
