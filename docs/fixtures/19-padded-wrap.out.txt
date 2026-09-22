@@ -14,9 +14,9 @@ What I found checking the siblings
 
 I expected to hand you a consistency argument. It's the opposite:
 
-udlhistoryconsumer/KafkaServerCluster.java:99   consumer.assign(topics);
-udlhistoryconsumer/KafkaCache.java:102          // consumer.subscribe(Arrays.asList(topic));
-xdomainproducer/XDPProcessor.java:190           consumer.assign(Arrays.asList(topicPartition));
+- udlhistoryconsumer/KafkaServerCluster.java:99 - consumer.assign(topics);
+- udlhistoryconsumer/KafkaCache.java:102 - // consumer.subscribe(Arrays.asList(topic));
+- xdomainproducer/XDPProcessor.java:190 - consumer.assign(Arrays.asList(topicPartition));
 
 The cursor pattern is the house pattern, not a udl quirk. And udlhistoryconsumer carries the same commented-out subscribe() line as udl - this propagated by copy-paste, including the dead code and the hesitation.
 
