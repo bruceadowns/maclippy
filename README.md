@@ -96,9 +96,14 @@ Accumulate incremental commits on a working branch, then squash-merge it into
 
 ## Inspiration
 
-The menu-bar-only, click-to-paste design takes cues from **CopyClip** by
-FIPLAB — a long-running Mac clipboard manager that lives entirely in the menu
-bar.
+- **CopyClip** by FIPLAB — the menu-bar-only, click-to-paste design takes its
+  cues from this long-running Mac clipboard manager that lives entirely in the
+  menu bar.
+- [**removeclaudewhitespace**](https://github.com/coeymusa/removeclaudewhitespace)
+  by coeymusa — a web tool solving the problem [Reformat](docs/reformat.md)
+  solves. Found after that design was drafted; two designs converging on the
+  same line-oriented shape is better evidence for it than either alone, and §2
+  of the spec records where the two differ.
 
 ## License
 
