@@ -1,0 +1,58 @@
+⏺ Summary
+  -------
+  Spike: generate and compare scaffold options for xdomainconsumer
+
+  Type: Spike
+  Parent / Initiative: AFDL-66945
+  Labels: xdomainconsumer, spike
+  Timebox: 3 days
+
+  Description
+
+  Before the service is built for real, stand up throwaway scaffolds and compare them, so the
+  shape is chosen on evidence rather than by copying whichever sibling was nearest. The design
+  already names three deliberate divergences from udlhistoryconsumer — the logging stack, the
+  per-host enable flags, and the logback.xml silencing target — and each came out of a spike
+  that was later deleted. This is the work that produces the fourth answer rather than
+  rediscovering the first three.
+
+  Scope is the scaffold only: configuration surface, health endpoints, credential loading and
+  logging (AC-38). No intake, no ingest, no retry pipeline.
+
+  Variables worth generating options for:
+    Baseline        patterned after udlhistoryconsumer, after secure-streaming-observation, or
+                    generated fresh from the Quarkus platform BOM
+    Logging         quarkus-logging-logback + logstash-logback-encoder, which is what udl's
+                    Splunk dashboards spath, versus Quarkus file or console logging, which the
+                    sibling uses and which produces nothing those dashboards can parse
+    Packaging       JAR for Ansible, or a container image
+    Config surface  Ansible-rendered properties, or values and environment variables
+
+  The last two are the deployment decision in disguise, so build the scaffold to isolate them:
+  the configuration surface and the logging schema should not have to be rewritten when that
+  decision lands. That isolation is itself a finding worth recording.
+
+  Rebuild from design.md rather than from memory of the deleted spike. What the earlier attempts
+  learned is already written into the package: the five fixed defects and the one carried
+  forward are in findings.md, and the copy-not-share decision is in the copy ADR.
+
+  Acceptance Criteria
+
+  1. At least two scaffold options exist and run locally, each starting with no topics consumed.
+  2. A written comparison records, per option, what it costs to change the packaging and the
+     configuration surface after the deployment decision.
+  3. The logging option is chosen against evidence that the emitted schema is parseable by the
+     dashboards that will consume it.
+  4. A recommendation is recorded in the flowtask with the reasoning, and anything that changes
+     the design is raised against it.
+  5. The scaffolds are disposable: nothing from this spike is required to survive into the real
+     repository.
+
+  Test Instructions
+
+  1. Start each scaffold. Confirm it comes up consuming no topics and its health endpoints
+     respond.
+  2. Confirm each emits a log line in the schema its chosen stack expects, and that credentials
+     load from that option's mechanism without appearing in the log.
+
+  AC-5 is the one worth keeping honest — the last two spikes were deleted, and the value came from what got written into the design, not from the code. Framing this as disposable up front makes that the expected outcome rather than a loss.

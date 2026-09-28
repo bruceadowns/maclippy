@@ -48,8 +48,9 @@ top of a quote gutter, a wrap that arrived as 183 interior spaces instead of a
 newline, a paragraph wrapped exactly once, a table whose cells wrap across three
 physical rows and sit vertically centered, a Java method embedded in prose, a
 `·` in body prose where every earlier one sat on a status line, a URL the
-wrapper split mid-token, and an already-reformatted transcript fed straight back
-in.
+wrapper split mid-token, an already-reformatted transcript fed straight back in,
+a lone wrapped list item whose column only two lines reach, and a stanza that is
+one line of prose above a table.
 
 Tool calls, tool results, prompts and diff views are **not** here. §0 puts them
 out of domain; the fixtures that carried them were pruned along with the rules

@@ -89,6 +89,7 @@ enum Reformat {
         lines = performJoins(lines, at: Set(joins), width: width)
         lines = dedent(lines)                                           // 7
         lines = convertTables(lines)                                    // 8
+        lines = convertAlignedBlocks(lines)                             // 8b
         // Membership is computed here, not earlier: joins and table conversion
         // both change the line count, so any index taken before them is stale.
         let code = codeBlockMembership(lines)
@@ -204,21 +205,25 @@ private extension Reformat {
         // `clusters` is already ordered highest-first: it is built by walking the
         // distinct lengths downward, so each new cluster holds smaller values.
         var lonely: Int?
+        var pair: Int?
         for cluster in clusters {
             guard let hi = cluster.first, let lo = cluster.last else { continue }
             guard Double(lengths.filter { $0 > hi }.count)
                 <= maxExceedingW * Double(lengths.count) else { continue }
-            guard lengths.filter({ $0 >= lo && $0 <= hi }).count >= minClusterLines else {
-                lonely = lonely ?? hi   // highest-first, so the first one seen is the highest
+            let population = lengths.filter { $0 >= lo && $0 <= hi }.count
+            guard population >= minClusterLines else {
+                // Highest-first, so the first one seen at each rung is the highest.
+                if population >= 2 { pair = pair ?? hi } else { lonely = lonely ?? hi }
                 continue
             }
             return hi
         }
         // A paragraph wrapped N times puts only N-1 lines at the column, so a
-        // single wrap can never form a cluster. Trust the lone candidate only when
-        // no populated one exists anywhere below it — that is what separates the
-        // one-wrap paragraph from a stray long line above a real column.
-        return lonely
+        // single wrap can never form a cluster. Fall back in descending order of
+        // evidence — two lines agreeing on a column beat one line agreeing with
+        // nothing — which is what separates a real column from a stray long line
+        // sitting above it.
+        return pair ?? lonely
     }
 
     // MARK: - Stage 6 — unwrapping (§6.2, §6.3)
@@ -226,6 +231,7 @@ private extension Reformat {
     /// Indices `i` where line `i` should absorb line `i+1`.
     static func forcedBreaks(_ lines: [String], width: Int) -> [Int] {
         let inList = runMembership(lines, openedBy: startsListItem)
+        let rowStarts = alignedRowStarts(lines)
         var result: [Int] = []
 
         for i in 0..<max(0, lines.count - 1) {
@@ -234,6 +240,7 @@ private extension Reformat {
             guard !isTable(a), !isTable(b), !isQuote(a), !isQuote(b) else { continue }
             guard !startsListItem(b) else { continue }
             guard !isHeader(a), !isHeader(b) else { continue }
+            guard !rowStarts.contains(i + 1) else { continue }
 
             // A sentence end usually means the break was authored — unless we are
             // inside a list (siblings carry markers, so `startsListItem` already

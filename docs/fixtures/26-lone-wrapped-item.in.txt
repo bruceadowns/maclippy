@@ -1,0 +1,10 @@
+⏺ Yes — and most of what I'd padded them with was scaffolding. Keeping only what the MR version can't assume: QA POSTs rather than seeds, and each collection has a required date param.
+
+  AFDL-66733
+
+  ## Test Instructions
+
+  1. POST two records to each of `/udl/analyticimagery`, `/udl/eventevolution`,
+     `/udl/featureassessment`, `/udl/launchindicator`, `/udl/sarobservation` (`dataMode: TEST`),
+     one with `atext` inside a polygon you choose and one outside. Wait for both to appear on
+     `/udl/<x>/history`.

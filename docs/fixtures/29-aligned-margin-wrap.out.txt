@@ -1,0 +1,38 @@
+Measured, not asserted. Here's what the current rules do and what the deferred fix does.
+
+Current behavior on this paste: a real defect
+
+NOT IDEMPOTENT. Pass 1 welds the Packaging row onto the end of the Logging row; pass 2 then eats Config surface into the same line. Each pass lengthens the line, which moves the estimated wrap width, which licenses the next weld. This is the columnar-listing-surrounded-by-prose paste that aligned-columns-join-guard-deferred was holding for - and it's worse than that memo recorded, because the memo only predicted bad joins, not a fixed point that never settles.
+
+The recorded fix is the wrong shape
+
+The memo says "block a forced break when either line has an interior run of 2+ spaces." Measured here, that over-blocks - it also refuses the joins that should happen, because a column row's first line has the padding run too:
+
+  Baseline        patterned after udlhistoryconsumer, after secure-streaming-observation, or generated fresh from the Quarkus platform BOM
+
+Testing the lower line only instead gives what I believe you want:
+
+  Variables worth generating options for:
+  - Baseline - patterned after udlhistoryconsumer, after secure-streaming-observation, or generated fresh from the Quarkus platform BOM
+  - Logging - quarkus-logging-logback + logstash-logback-encoder, which is what udl's Splunk dashboards spath, versus Quarkus file or console logging, which the sibling uses and which produces nothing those dashboards can parse
+  - Packaging - JAR for Ansible, or a container image
+  - Config surface - Ansible-rendered properties, or values and environment variables
+
+Idempotent. Every wrapped continuation folds into its own row; no row absorbs the next. Against the rest of the document it's a one-line diff from today's output - nothing else moves.
+
+|  | corpus (27 fixtures) | this paste |
+| --- | --- | --- |
+| today | pass | not idempotent, 2 rows welded |
+| guard on either line | pass, 0 joins lost | idempotent, continuations left broken |
+| guard on lower line | pass, 0 joins lost | idempotent, rows correct |
+
+The guard isn't vacuous on the corpus: 37 lines across 8 of 27 fixtures carry an interior 2+ space run and are tested by it, and no join changes.
+
+Judgment calls I made
+
+1. That a wrapped column row should be joined at all. I assumed the row's text is one logical value, so variant B is right and A is over-blocking. The opposite reading is defensible - treat the whole columnar block as verbatim and preserve every terminal break inside it. That's the one real fork here and it's yours.
+2. Threshold still 2, unexamined, on the memo's "nothing in the corpus lives between 2 and 32."
+3. Exposure I can't witness: the lower-line test would also block a prose join where the continuation begins after a double space - two spaces after a sentence period. Nothing in the corpus does this, so per your own bar there's no fixture for it and I didn't guard it.
+4. Em dashes became - (lines 12, 38) and the ------- rule under Summary survived. Both are existing behavior, not decisions I made, but they're going into Jira so worth an eye.
+
+Not landing anything: you're on two-line-wrap-cluster with its own work, and the fix's predicate differs from what the memo recorded, so it needs your call first. The scratch variants are built and ready to re-run.

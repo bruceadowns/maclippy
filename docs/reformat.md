@@ -267,6 +267,7 @@ guardrail live in `Reformat+Predicates.swift`.
 | 6 | Unwrap forced breaks | §6.2 |
 | 7 | Dedent by common leading whitespace | **after** unwrap — see below |
 | 8 | Convert box-drawing tables to Markdown | §5.1 |
+| 8b | Emit a space-aligned block as a list | §6.3.1; at the block's lead-in indent |
 | 9 | Flatten punctuation | §7 flatten table; an embedded code block is exempt (§6.1) |
 | 10 | Collapse any run of blank lines to 1 | whitespace-only counts as blank |
 | 11 | Trim leading/trailing blank lines | output always ends with exactly one line feed |
@@ -367,9 +368,11 @@ dispatch on kind" earns its keep in a parser with ten block types, not in five
 line tests.
 
 The practical difference is small. A predicate cannot express "this region is
-one unit", but nothing here needs that: table conversion (§5.1) gathers its own
-run of adjacent rows at stage 8, and quote handling (§5.2) is per-line by
-design.
+one unit", and almost nothing here needs that: table conversion (§5.1) gathers
+its own run of adjacent rows at stage 8, and quote handling (§5.2) is per-line by
+design. The one exception is the space-aligned table of §6.3.1, which is a
+property of a *pair* of lines and cannot be reduced to a per-line test without
+blocking joins nothing witnesses.
 
 **Unrecognized content is prose**, where every join is still gated by the
 forced-break test (§6.2). That gate is necessary but **not sufficient** — bare
@@ -397,7 +400,9 @@ destination.
 
 1. **Separator rows are dropped**, in *both* dialects:
    - box rules — any row that is nothing but box glyphs and whitespace
-     (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`);
+     (`├──┼──┤`, `┌──┬──┐`, `└──┴──┘`). A row whose cells are all empty is one
+     of these, and is consumed with them — fixture 27's table has a blank header
+     row and loses it, which is the intended trade at step 4 below;
    - **Markdown delimiter rows** — every cell matching `:?-+:?`
      (`| --- | --- |`, `| :--- | ---: |`).
 
@@ -412,7 +417,10 @@ destination.
    the outer border produces are discarded; each cell is trimmed of its padding.
 3. **`|` in cell content is escaped** as `\|`.
 4. **The first surviving row becomes the header**, whether or not a separator
-   followed it in the source — Markdown has no headerless table.
+   followed it in the source — Markdown has no headerless table. A table with a
+   blank header row therefore promotes its first data row; fixture 27 is that
+   table, and the alternative — emitting `|  |  |` to keep the row count — was
+   tried and rejected as inventing a header cell the source never had.
 5. **A `| --- |` delimiter row is emitted per column.** Alignment is *not*
    inferred from source padding: box renderers centre-pad headers regardless of
    intent, so the padding carries no signal, and Markdown alignment is cosmetic.
@@ -529,14 +537,17 @@ corpus spans 93 to 242 (§8), so no constant is possible.
    ≤ **8**.
 3. Walk groups **highest first** and take the first that holds at least 3 lines
    *and* survives the exceed check below — not the group with the most lines.
-4. `W` = that group's maximum. If no group holds 2 lines, fall back to the
-   **highest** group that passed the exceed check, however few lines it has. A
-   paragraph wrapped *N* times leaves only *N-1* lines at the column, so a
-   paragraph wrapped exactly once can never form a group — and that is the most
-   ordinary paste there is (fixture 20). The fallback applies only when nothing
-   populated exists anywhere below, which is what separates a one-wrap paragraph
-   from a stray long line sitting above a real column: in fixture 1 a lone
-   120-character line loses to the 31-line column at 95, as it must.
+4. `W` = that group's maximum. When no group holds 3, fall back in descending
+   order of evidence: the **highest** group holding 2 that passed the exceed
+   check, and only if none does, the highest that passed it at all, however few
+   lines it has. A paragraph wrapped *N* times leaves only *N-1* lines at the
+   column, so a paragraph wrapped exactly once can never form a group — and that
+   is the most ordinary paste there is (fixture 20). A single wrapped list item
+   leaves two when a long token forces its first break early (fixture 26). Both
+   rungs apply only when nothing better-populated exists anywhere below, which is
+   what separates a real column from a stray long line sitting above one: in
+   fixture 1 a lone 120-character line loses to the 31-line column at 95, as it
+   must.
 
    What keeps this safe is `terminalPunctuation` (§6.3). The fallback's exposure
    is a long line followed by a short one, and when the long line ends a sentence
@@ -564,8 +575,18 @@ The gate is a single document-level measurement, and it disables the **whole
 pipeline**, not just unwrapping:
 
 ```
+contains a rule row (§5.1)                      ->   never code
 mean(words per non-blank, non-table line) < 8   ->   return the input unchanged
 ```
+
+The table exemption is not a softening of the gate. A box table is something a
+terminal drew and source code does not contain one, so its presence settles the
+question the mean is trying to answer. It has to be stated separately because
+table rows are *masked* from the measurement — the same "not unwrapped, therefore
+not evidence" mistake that quote lines made at fixture 18 — which leaves a stanza
+that is mostly table with almost nothing to measure. Fixture 27 is one prose line
+above a nine-row table: the mean is 6.0 over that single line and the whole paste
+came back byte-identical, marker included.
 
 Reformat does not reformat code. Dedenting a pasted method or flattening an em
 dash inside a comment is still an edit to source, so once the text is judged code
@@ -730,8 +751,11 @@ is the one thing this feature must never do.
 
 Nor can tuning save both: fixture 14's alignment runs reach **11** spaces and
 fixture 19's `file:line` listing uses 10 and 11. The two are indistinguishable by
-run length, so any threshold that spares the diff also spares the listing. The
-listing keeping alignment it does not need is the cheaper error.
+run length, so any threshold that spares the diff also spares the listing, and
+this stage leaves both alone. That is the right call *here* and not the last
+word: §6.3.1 separates them at stage 8b on a signal this stage cannot see — the
+listing has three aligned rows and the diff has one line — and fixture 19's
+listing reaches the output as a list.
 
 Interior runs across the corpus are 2–11 (alignment) and 183 (padding), so 32
 sits between them with room on both sides. It is absolute rather than a fraction
@@ -832,6 +856,7 @@ All must pass. Declared as a named table so each is individually testable.
 | `intoListItem` | the next line starts a list item |
 | `header` | either line is a header |
 | `terminalPunctuation` | the current line ends in `.` `?` `!` — **unless** the current line is inside a list item and the next is not, **or** the next line is itself ≥ `W - tolerance` |
+| `alignedRow` | the next line is a row of a space-aligned table (§6.3.1) |
 
 **`terminalPunctuation` is the highest-value guard.** It is what keeps sample 1's
 two `CALLERS` entries apart — 86 + `udl-aodr` = 95 > 85 would otherwise join two
@@ -893,6 +918,100 @@ either direction, nor broke idempotency:
   factor, because `intoListItem` and `header` already catch
   every case it would have. Four alternatives that between them permitted
   everything is a guard that guards nothing.
+
+### 6.3.1 Space-aligned tables
+
+A stanza often carries a borderless table the terminal drew with spaces: a label
+column padded out to a shared start column, each row's text wrapping beneath it.
+
+```
+    Baseline        patterned after udlhistoryconsumer, after secure-streaming-observation, or
+                    generated fresh from the Quarkus platform BOM
+    Logging         quarkus-logging-logback + logstash-logback-encoder, which is what udl's
+                    Splunk dashboards spath, versus Quarkus file or console logging, which the
+                    sibling uses and which produces nothing those dashboards can parse
+    Packaging       JAR for Ansible, or a container image
+```
+
+`isTable` cannot see this — no rules, no pipes, every line ordinary prose. The
+forced-break test then welds `Packaging` onto the end of the `Logging` row, and
+because the welded line is longer the next pass moves `W` and takes the row after
+it. The damage compounds and the output never reaches a fixed point, which is
+what makes this worse than an ordinary wrong join: fixture 28 is **not
+idempotent** without the guard.
+
+The signal is alignment, and no single line carries it. `padColumn` reports the
+column where a line's first interior run of 2+ spaces ends; two **adjacent**
+lines at the same indent reporting the same column are a table. Stage 6 refuses
+to join into either, and stage 8b rewrites the run as a list.
+
+**Two spaces is not a tuned threshold.** One space is word spacing; two or more
+is padding. The discrimination comes from corroboration between neighbours, not
+from the number — which is the difference between this and the per-line space
+test it replaced. That test blocked joins on 37 padded lines across the corpus
+where only 5 belong to a real block, and nothing witnessed the other 32.
+
+**Adjacency means different things at the two stages, and that is the point.**
+The stage 6 guard sees lines before any join, so rows separated by their own
+continuations are not paired there; fixture 28 is protected because it happens to
+contain one adjacent pair, `Packaging` / `Config surface`. Stage 8b sees them
+after §6.2 has folded every continuation into its row, so by then the rows *are*
+consecutive and the whole block converts. Fixture 29 is the case that shows it:
+its continuations wrap back to the left margin rather than to the pad column, so
+nothing pairs them before the join, and all four rows still convert after it.
+
+The residual gap is narrow — a block whose rows are separated after joining, which
+no paste has produced. Walking the continuations to pair distant rows was built
+and measured against the corpus: it changes no fixture in either direction, so it
+is not here.
+
+**This is the first guard that is a relation rather than a predicate.** §5 argues
+for per-line predicates over a block model and that argument still holds — but
+"these two lines are columns of one table" is irreducibly about a pair, and
+faking it per-line is what produced the unwitnessed 32.
+
+#### What stage 8b emits
+
+`- label - text`, one item per row, splitting each row at its pad column.
+Preserving the alignment was the earlier behavior and is not worth keeping: the
+padding is a terminal artifact and reaches Jira as ragged whitespace.
+
+**The list marker is load-bearing, not decoration.** Emitting `label - text`
+without it was measured and is **not idempotent**: stage 8b removes the very
+padding stage 6 reads, so the next pass sees ordinary prose and welds the rows
+back together. `isListStart` is what holds them apart, and it is the only thing
+doing that job.
+
+**A Markdown table was the other candidate, and its header slot rules it out.**
+Markdown has no headerless table, so the block's first row — plain data — becomes
+a column heading. Emitting `|  |  |` above it does not survive: `boxChars`
+contains `|`, so `isRuleRow` reads an all-blank pipe row as a rule, the split
+consumes it, and the first data row is promoted anyway. Making that work means
+requiring a rule row to contain a horizontal glyph — which is what `c25f521`
+built and `27a28a4` reverted for want of a witness. It was measured here as
+idempotent, but it also rewrites fixture 27, and a list needs none of it.
+
+**The list takes its lead-in's indent**, not the block's own and not column 0.
+The source indented those rows to set them apart from the line introducing them;
+a list marker already does that, so carrying the indent as well doubles up. It
+also keeps fixture 29's list off the 4-space depth where CommonMark stops
+reliably reading an indented `-` beneath a paragraph as a list. The lead-in is
+the nearest preceding non-blank line, which is 0 when the block opens a stanza.
+
+**Two rows are required, and that is what protects the padding worth keeping.**
+Three lines in the corpus still carry interior padding after Reformat: fixture
+14's side-by-side diff, which holds two columns on one line and must never be
+collapsed (§6.1.1); fixture 23's `return doc;` and its aligned trailing comment,
+which is source; and one lone row in fixture 29. All three are single padded
+lines with no twin. Dropping the two-row requirement to catch the third was
+measured: it mangles the diff into a list item and is **not idempotent**, and it
+turns the line of Java into `- return doc; - // untouched`. One stranded row is
+the cheaper error.
+
+Guards on `|` in a cell and on empty cells were written first and are not here.
+Ablation says the corpus passes without the pipe test, and `padColumn` only
+returns a column when a non-space follows the run, which makes an empty cell
+unreachable.
 
 ### 6.4 Dedent
 
@@ -1076,7 +1195,7 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 5 | Risks + acceptance criteria; header abutting a list | 21 | short | 95 | 70–95, 16 lines (25) | 7 |
 | 6 | Status summary; column-0 hard wraps | 9 | filled | 187 | 181–187, 3 lines (6) | 3 |
 | 7 | Ticket draft; label headers, `---` rule, long paragraphs | 26 | filled | 232 | 216–232, 10 lines (16) | 10 |
-| 8 | Four bullets, one wrapped | 5 | filled | 223 (lone fallback) | 173–181, 2 lines (8) | 1 |
+| 8 | Four bullets, one wrapped | 5 | filled | 181 (pair fallback) | 173–181, 2 lines (8) | 1 |
 | 9 | Ticket draft; first line missing its indent | 29 | filled | 232 | 224–232, 8 lines (8) | 10 |
 | 10 | Summary + 21-row, 3-column box table with emoji cells | 9 prose (+21 table) | filled | 165 | 160–165, 3 lines (5) | 3 |
 | 11 | Push summary + `▎` quote-bar blocks | 17 | filled | 232 | 219–232, 8 lines (13) | 5 |
@@ -1094,6 +1213,10 @@ were long enough for the terminal to break them (§6.2) — not who wrote them; 
 | 23 | Prose analysis wrapping a four-line Java method, plus a `▎` block | 25 prose (+4 code) | filled | 208 | 201–208, 9 lines (5) | 5 |
 | 24 | Spec discussion quoting a flatten rule — `·` and `→` inside body prose | 12 | filled | 208 | 201–208, 8 lines (5) | 8 |
 | 25 | A 231-character URL the wrapper split mid-token, a short URL inside a normal wrap as control, and a space break that lands on `W` by coincidence | 20 | filled | 208 | 200–208, 10 lines (6) | 10 |
+| 26 | One wrapped list item below an unwrapped 184-character paragraph; only two lines reach the column | 7 | short | 96 (pair fallback) | 93–96, 2 lines (3) | 3 |
+| 27 | One prose line above a box table with an all-blank header row | 1 prose (+9 table) | — | none (one measurable line) | no estimate | 0 |
+| 28 | Ticket draft whose middle carries a four-row space-aligned table, rows wrapping under their labels | 46 | filled | 96 | 81–96, 23 lines (15) | 19 |
+| 29 | Analysis stanza: a box table plus a space-aligned block whose rows wrap back to the left margin, not to the column | 40 prose (+9 table) | filled | 105 | 59–105, 30 lines (46) | 20 |
 
 Measuring before dedent raises `W` by exactly the dedent amount and **changes no
 join decision** — checked directly, both orderings produce identical join sets.
@@ -1105,11 +1228,12 @@ miss recorded here was fixture 12, which §0 put out of domain.
 
 **The `W` column is measured, not asserted** — it is what `estimateWidth` returns
 at stage 5, re-measured whenever the estimator changes. Every row was
-re-measured after the §0 prune; row 22 was missed and read `237` against a
-measured `238`. Row 8's `223` is *not* drift, though it was
-briefly mistaken for it: it is what the estimator returns with the cluster
-minimum at 3, which is the value in force. `W` is a function of the
-configuration, so re-measure the column rather than reasoning about it.
+re-measured after the §0 prune — row 22 was missed then and corrected in #12 —
+and again after fixture 26 added the two-line rung, which moved row 8 from `223`
+to `181`, its real column. That `223` was itself called drift once, when it was
+simply what the estimator returned with the cluster minimum at 3: `W` is a
+function of the configuration, so re-measure the column rather than reasoning
+about it.
 
 **Fixture 17's zero joins are not a miss.** Its width estimate is correct and
 every long line is a quote line, which §5.2 declines to unwrap; the four
@@ -1141,7 +1265,9 @@ than accumulated. It is not proof. Two things are worth watching:
   signal to redesign rather than extend.
 
 **The governance rule going forward:** a new sample should be absorbed by
-existing rules, or expose a *bug* in one. Fixtures 5, 10 and 13 moved nothing;
+existing rules, or expose a *bug* in one. A rule is admitted only when a fixture
+fails without it — a corner case argued from reasoning alone is not admitted, and
+the cost of the 1% case is that Reformat leaves it alone. Fixtures 5, 10 and 13 moved nothing;
 13 revealed a flaw in the estimator. That is the healthy pattern. If three
 consecutive samples each require a *new* rule, the design is over-fitting and the
 right response is to simplify, not to keep adding.
@@ -1157,6 +1283,8 @@ argued about:
 | Wrapped cells (21) | require one interior rule instead of two | a converted Markdown table folds into a single row on pass 2 — **load-bearing, and adds no constant** |
 | Token-split join (25) | join with a space, as before | fixture 25's URL gains a space mid-path and stops being a link — **load-bearing, no constant** |
 | `·` → `-` (24) | target `*` instead | fixture 24's body `·` becomes `*`, which reads as emphasis rather than a separator — **load-bearing, no constant** |
+| Table exemption (27) | delete it | fixture 27 returns byte-identical, marker included — **load-bearing, and adds no constant** |
+| Two-line rung (26) | drop it, leaving the lone candidate | fixture 26 loses all 3 joins: the unwrapped 184-character paragraph above the list is taken for the column — **load-bearing, and adds no constant** |
 | Code block exemption (23) | delete it | the em dash in fixture 23's comment flattens — output is still idempotent, so only the fixture catches it — **load-bearing, one constant** |
 
 All three survive, but the audit did find one redundancy: fixture 15's lowering
@@ -1194,6 +1322,8 @@ Each sample forced a rule that no amount of reasoning had produced:
 | 22 | Circled numerals flatten, and the rewrite has to happen before the join decisions rather than at stage 9, or the marker changes `startsListItem` between passes. Also: a run ends at a table row, not only at a blank. §5.2's premise that a blank always follows a prompt is false: the CLI brackets its prompt in `─` rules, and the closing rule and the status footer below it were being quoted as though typed |
 | 23 | A code block inside a prose document is exempt from flattening. The §6.1 gate is whole-document by necessity, which leaves embedded code unprotected; the fix is a precise supplement, not a second gate — it may miss a language without costing anything |
 | 24 | `·` flattens to `-`, not `*`. Every earlier `·` sat on a status line, so the wrong target looked harmless and its ablation looked inert — both because the corpus held no in-domain instance. A stanza discussing the rule supplied one. `*` is markup where `·` was inert; `-` is inert and the same width |
+| 27 | A box table means the document is not code, which has to be said outright because table rows are masked from the words-per-line measurement — a stanza that is mostly table starves the mean and the guardrail eats the whole paste, marker included. One rule, no constant. Two further rules were written for the blank header row this table also carries and both were reverted: §5.1 already handled it, and neither changed a fixture |
+| 26 | The lone-candidate fallback needs a rung above it — two lines agreeing on a column beat one line agreeing with nothing. A list item wrapped four times left only two lines at the column, because a long backticked token forced its first break early and the tail is short, so an unwrapped 184-character paragraph above it won the estimate and nothing joined. The same item joins as soon as a second item follows it, which is what shows the estimate rather than the join rules to be at fault |
 | 25 | A break inside a token rejoins with no separator. The wrapper splits a token only when it cannot fit a line, so the fragments sum to more than `W` — the test is the definition, not a heuristic. Length at `W` is *not* the test: the fixture holds a coincidental space break at the same length |
 
 **The corpus keeps disproving convergence.** Sample 5 moved no rule, which looked
@@ -1229,6 +1359,13 @@ quote blocks were added, a check of *which fixtures changed* passed while fixtur
 11 silently went from five joins to zero. Counting joins catches that; comparing
 file lists does not.
 
+The count is a line-count delta, so any stage that adds or drops a line skews it.
+Stage 8b is line-for-line and does not, but a box table drops its rule rows and
+does: fixture 29 reports 24 against a true join count of 20. Fixtures 19 and 28
+report their true counts, 10 and 19. The signal it exists
+for — a fixture quietly dropping to zero — still works; the absolute number has
+not meant only joins since stage 8 existed.
+
 **Run it twice on anything suspicious.** Three of the four defects found while
 writing this spec produced correct-looking first-pass output and only appeared on
 a second run — dedent ordering (§4), a collapsed wrap-width estimate (§6.1), and
@@ -1252,10 +1389,11 @@ The invariants worth checking by hand, should something look wrong:
 |---|---|---|
 | Wrap-cluster gap | 8 | §6.1 grouping threshold |
 | Forced-break tolerance | 8 | §6.2; absorbs the spread of a short-lined stanza |
-| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, with a lone-candidate fallback when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
+| Minimum cluster size | 3 lines | §6.1; candidates are tested highest-first, falling back to the highest 2-line group and then to a lone candidate when no group reaches 3. The corpus passes at 2 as well, so the value has slack |
 | Max absorbable token | 100 chars | §6.2; longer means path/identifier, not a wrapped word |
 | Code guardrail | mean < 8 words/line | §6.1; below this the text is code, not wrapped prose |
 | Min padding run | 32 chars | §6.1.1; a run this long is a row boundary, not alignment |
+| Column padding run | 2 spaces | §6.3.1; one space is word spacing. Corroborated by an adjacent twin rather than tuned — every value 2–7 behaves identically on the corpus |
 | Max fraction exceeding `W` | 25% | above this the estimate is rejected and unwrapping is skipped (§6.1) |
 | Blank-run collapse | any run → 1 | see below |
 | Marker widths | §7 | |
