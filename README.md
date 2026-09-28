@@ -27,6 +27,18 @@ hotkeys to learn, no modes, no dependencies. *What you copied is what you paste.
 - Skips items apps mark as sensitive (password managers, etc.).
 - **Clear Formatting** — strip rich (RTF/HTML) styling from the current
   clipboard so the next paste lands as plain text.
+- **Reformat** — rewrite the current clipboard so a terminal response pastes
+  cleanly into a merge request, commit message, or ticket:
+  - ANSI escapes and zero-width characters removed
+  - response markers replaced, quote gutters normalized to `>`
+  - box-drawing tables converted to Markdown
+  - hard-wrapped paragraphs rejoined at the inferred terminal width
+  - typographic punctuation flattened to ASCII — `—`→`-`, `…`→`...`, `→`→`->`
+  - indent, trailing space and blank runs normalized
+
+  Pasted source code is recognized and returned untouched. The result is
+  captured as a new clip, so the original stays one row below it in Recent.
+  Details in [`docs/reformat.md`](docs/reformat.md).
 - Preferences for history size, privacy, launch-at-login, and clip management
   (pin, rename, reorder, delete).
 - **About** panel with version and a link to the project.
